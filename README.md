@@ -218,11 +218,15 @@ Required Render variables:
 - `AI_PROVIDER`
 - the selected provider key, such as `GEMINI_API_KEY`
 
-Persistent uploads use Cloudflare R2 through the existing S3-compatible storage
-layer. Set `MEDIA_STORAGE_TYPE=s3` and `MEDIA_S3_PROVIDER=R2`, then configure:
+Persistent uploads use Supabase Storage through the existing S3-compatible
+storage layer. Set `MEDIA_STORAGE_TYPE=s3` and
+`MEDIA_S3_PROVIDER=S3_COMPATIBLE`, then configure:
 
 - `MEDIA_S3_BUCKET`
 - `MEDIA_S3_ENDPOINT`
+- `MEDIA_S3_REGION`
+- `MEDIA_S3_PATH_STYLE=true`
+- `MEDIA_S3_CHUNKED_ENCODING=false`
 - `MEDIA_S3_ACCESS_KEY`
 - `MEDIA_S3_SECRET_KEY`
 
@@ -232,6 +236,6 @@ the free Render instance restarts or redeploys.
 
 Set `ALLOWED_ORIGINS` to the exact Vercel HTTPS origin. Multiple exact origins
 can be comma-separated when adding a custom domain. Production intentionally
-fails fast if required database, JWT, CORS, selected provider, or enabled R2
+fails fast if required database, JWT, CORS, selected provider, or enabled S3
 configuration is missing. Flyway runs before Hibernate schema validation;
 production never uses `ddl-auto=update`.

@@ -36,6 +36,8 @@ public class S3MediaProperties {
         }
         if (provider == S3MediaProvider.R2) {
             validateR2(hasAccessKey);
+        } else if (provider == S3MediaProvider.S3_COMPATIBLE) {
+            validateCompatibleProvider(hasAccessKey);
         } else if (!StringUtils.hasText(region)) {
             throw new IllegalStateException("MEDIA_S3_REGION is required for AWS S3");
         }
@@ -72,6 +74,27 @@ public class S3MediaProperties {
         }
         if (!hasAccessKey) {
             throw new IllegalStateException("Cloudflare R2 requires explicit S3 API credentials");
+        }
+    }
+
+    private void validateCompatibleProvider(boolean hasAccessKey) {
+        if (!StringUtils.hasText(region)) {
+            throw new IllegalStateException("MEDIA_S3_REGION is required for S3-compatible storage");
+        }
+        if (!StringUtils.hasText(endpoint)) {
+            throw new IllegalStateException("MEDIA_S3_ENDPOINT is required for S3-compatible storage");
+        }
+        URI endpointUri;
+        try {
+            endpointUri = URI.create(endpoint);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("MEDIA_S3_ENDPOINT must be a valid HTTPS URL", exception);
+        }
+        if (!"https".equalsIgnoreCase(endpointUri.getScheme()) || endpointUri.getHost() == null) {
+            throw new IllegalStateException("S3-compatible storage requires a valid HTTPS endpoint");
+        }
+        if (!hasAccessKey) {
+            throw new IllegalStateException("S3-compatible storage requires explicit S3 API credentials");
         }
     }
 
