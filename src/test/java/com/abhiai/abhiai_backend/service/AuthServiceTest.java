@@ -50,7 +50,7 @@ class AuthServiceTest {
 
     @Test
     void loginReturnsBearerTokenForValidCredentials() {
-        User user = new User("Abhishek", "user@example.com", "bcrypt-hash");
+        User user = new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash");
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("safe-password", "bcrypt-hash")).thenReturn(true);
         when(jwtService.generateAccessToken(any(), eq("user@example.com"))).thenReturn("signed-token");

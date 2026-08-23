@@ -1,5 +1,11 @@
 HELP.md
 target/
+.DS_Store
+.env
+.env.*
+!.env.example
+application-local.properties
+application-secrets.properties
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

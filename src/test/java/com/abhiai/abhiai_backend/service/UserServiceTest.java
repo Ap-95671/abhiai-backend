@@ -31,6 +31,9 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private UsernamePolicy usernamePolicy;
+
     @InjectMocks
     private UserService userService;
 
@@ -38,17 +41,20 @@ class UserServiceTest {
     void registerPersistsNormalizedEmailAndPasswordHash() {
         RegisterUserRequest request = new RegisterUserRequest("  Abhishek  ", "  USER@Example.COM ", "safe-password");
         when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+        when(usernamePolicy.generateInitialUsername(eq("user@example.com"), any())).thenReturn("user");
         when(passwordEncoder.encode("safe-password")).thenReturn("bcrypt-hash");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RegisteredUserResponse response = userService.register(request);
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
+        verify(userRepository).saveAndFlush(userCaptor.capture());
         assertEquals("Abhishek", userCaptor.getValue().getDisplayName());
+        assertEquals("user", userCaptor.getValue().getUsername());
         assertEquals("user@example.com", userCaptor.getValue().getEmail());
         assertEquals("bcrypt-hash", userCaptor.getValue().getPasswordHash());
         assertEquals("user@example.com", response.email());
+        assertEquals("user", response.username());
     }
 
     @Test
@@ -59,6 +65,6 @@ class UserServiceTest {
         assertThrows(EmailAlreadyRegisteredException.class, () -> userService.register(request));
 
         verify(passwordEncoder, never()).encode(any());
-        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).saveAndFlush(any());
     }
 }

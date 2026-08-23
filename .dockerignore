@@ -1,0 +1,6 @@
+.dockerignore
+.git
+.vscode
+.cursor
+target
+.env

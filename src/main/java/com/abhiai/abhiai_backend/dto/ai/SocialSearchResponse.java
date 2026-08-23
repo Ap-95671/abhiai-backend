@@ -1,0 +1,1 @@
+package com.abhiai.abhiai_backend.dto.ai;import java.util.List;import com.abhiai.abhiai_backend.dto.post.PostResponse;public record SocialSearchResponse(String query,List<PostResponse> sources,String notice){}

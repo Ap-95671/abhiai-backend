@@ -17,10 +17,15 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UsernamePolicy usernamePolicy;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            UsernamePolicy usernamePolicy) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.usernamePolicy = usernamePolicy;
     }
 
     @Transactional
@@ -31,11 +36,16 @@ public class UserService {
             throw new EmailAlreadyRegisteredException(normalizedEmail);
         }
 
+        String username = usernamePolicy.generateInitialUsername(
+                normalizedEmail,
+                userRepository::existsByUsernameIgnoreCase);
+
         User user = new User(
+                username,
                 request.displayName().trim(),
                 normalizedEmail,
                 passwordEncoder.encode(request.password()));
 
-        return RegisteredUserResponse.from(userRepository.save(user));
+        return RegisteredUserResponse.from(userRepository.saveAndFlush(user));
     }
 }

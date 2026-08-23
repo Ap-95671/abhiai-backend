@@ -1,0 +1,5 @@
+package com.abhiai.abhiai_backend.exception;
+
+public class PollNotFoundException extends RuntimeException {
+    public PollNotFoundException() { super("Poll not found"); }
+}

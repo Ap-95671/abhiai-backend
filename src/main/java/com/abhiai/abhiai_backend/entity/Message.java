@@ -36,7 +36,7 @@ public class Message {
     @Column(nullable = false, length = 16)
     private MessageRole role;
 
-    @Column(nullable = false, length = 10000)
+    @Column(nullable = false, columnDefinition = "text")
     private String content;
 
     @CreationTimestamp

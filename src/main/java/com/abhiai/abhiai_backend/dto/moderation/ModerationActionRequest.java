@@ -1,0 +1,1 @@
+package com.abhiai.abhiai_backend.dto.moderation;import java.util.UUID;import jakarta.validation.constraints.*;public record ModerationActionRequest(@NotBlank@Pattern(regexp="REMOVE_POST|RESTORE_POST|VERIFY_USER|REVIEW_REPORT")String action,@NotBlank@Pattern(regexp="POST|USER|REPORT")String targetType,@NotNull UUID targetId,@NotBlank@Size(max=1000)String reason,String value){}

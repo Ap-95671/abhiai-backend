@@ -9,9 +9,8 @@ public class OpenAiProperties {
 
     private String apiKey;
     private String baseUrl = "https://api.openai.com/v1";
-    private String model = "gpt-5.6-sol";
+    private String model = "gpt-4.1-mini";
     private String instructions = "You are AbhiAI, a helpful, accurate, and concise AI assistant.";
-    private String reasoningEffort = "low";
     private Duration connectTimeout = Duration.ofSeconds(10);
     private Duration requestTimeout = Duration.ofSeconds(60);
 
@@ -45,14 +44,6 @@ public class OpenAiProperties {
 
     public void setInstructions(String instructions) {
         this.instructions = instructions;
-    }
-
-    public String getReasoningEffort() {
-        return reasoningEffort;
-    }
-
-    public void setReasoningEffort(String reasoningEffort) {
-        this.reasoningEffort = reasoningEffort;
     }
 
     public Duration getConnectTimeout() {

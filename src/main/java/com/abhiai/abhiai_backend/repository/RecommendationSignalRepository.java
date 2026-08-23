@@ -1,0 +1,1 @@
+package com.abhiai.abhiai_backend.repository;import java.util.UUID;import org.springframework.data.jpa.repository.JpaRepository;import com.abhiai.abhiai_backend.entity.RecommendationSignal;public interface RecommendationSignalRepository extends JpaRepository<RecommendationSignal,UUID>{}

@@ -1,0 +1,4 @@
+package com.abhiai.abhiai_backend.service;
+import java.util.*;import org.springframework.stereotype.Component;import com.abhiai.abhiai_backend.ai.AiChatMessage;import com.abhiai.abhiai_backend.config.AiContextProperties;import com.abhiai.abhiai_backend.entity.Message;
+@Component public class AiConversationContextBuilder{private final AiContextProperties properties;public AiConversationContextBuilder(AiContextProperties p){properties=p;}
+ public List<AiChatMessage> build(List<Message> orderedHistory,AiChatMessage current){List<AiChatMessage> selected=new ArrayList<>();int chars=current.content().length();for(int i=orderedHistory.size()-1;i>=0&&selected.size()<properties.getMaxMessages()-1;i--){Message m=orderedHistory.get(i);if(chars+m.getContent().length()>properties.getMaxCharacters())break;selected.add(new AiChatMessage(m.getRole(),m.getContent()));chars+=m.getContent().length();}Collections.reverse(selected);selected.add(current);return List.copyOf(selected);}}

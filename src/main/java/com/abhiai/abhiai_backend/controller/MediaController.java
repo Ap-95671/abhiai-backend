@@ -1,0 +1,11 @@
+package com.abhiai.abhiai_backend.controller;
+import java.util.UUID; import org.springframework.http.*; import org.springframework.security.core.annotation.AuthenticationPrincipal; import org.springframework.web.bind.annotation.*; import org.springframework.web.multipart.MultipartFile;
+import com.abhiai.abhiai_backend.dto.media.MediaAssetResponse; import com.abhiai.abhiai_backend.security.JwtPrincipal; import com.abhiai.abhiai_backend.service.MediaService;
+@RestController @RequestMapping("/api/v1/media")
+public class MediaController { private final MediaService service; public MediaController(MediaService service){this.service=service;}
+ @PostMapping(value="/images",consumes=MediaType.MULTIPART_FORM_DATA_VALUE) public ResponseEntity<MediaAssetResponse> upload(@AuthenticationPrincipal JwtPrincipal p,@RequestPart("file") MultipartFile file){return ResponseEntity.status(HttpStatus.CREATED).body(service.uploadImage(p.userId(),file));}
+ @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE) public ResponseEntity<MediaAssetResponse> uploadAttachment(@AuthenticationPrincipal JwtPrincipal p,@RequestPart("file") MultipartFile file){return ResponseEntity.status(HttpStatus.CREATED).body(service.uploadAttachment(p.userId(),file));}
+ @GetMapping("/{id}/content") public ResponseEntity<org.springframework.core.io.Resource> content(@AuthenticationPrincipal JwtPrincipal p,@PathVariable UUID id){return mediaResponse(service.download(p.userId(),id,false));}
+ @GetMapping("/{id}/thumbnail") public ResponseEntity<org.springframework.core.io.Resource> thumbnail(@AuthenticationPrincipal JwtPrincipal p,@PathVariable UUID id){return mediaResponse(service.download(p.userId(),id,true));}
+ @DeleteMapping("/{id}") public ResponseEntity<Void> delete(@AuthenticationPrincipal JwtPrincipal p,@PathVariable UUID id){service.deleteUnattached(p.userId(),id);return ResponseEntity.noContent().build();}
+ private ResponseEntity<org.springframework.core.io.Resource> mediaResponse(MediaService.Download d){return ResponseEntity.ok().contentType(MediaType.parseMediaType(d.contentType())).cacheControl(CacheControl.noCache().cachePrivate()).header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.inline().filename(d.filename()).build().toString()).body(d.resource());}}

@@ -7,10 +7,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.doAnswer;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,7 +67,7 @@ class ChatServiceTest {
 
     @Test
     void createConversationUsesTheAuthenticatedUserAndNormalizesTitle() {
-        User user = new User("Abhishek", "user@example.com", "bcrypt-hash");
+        User user = new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash");
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(conversationRepository.save(any(Conversation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -80,7 +83,9 @@ class ChatServiceTest {
 
     @Test
     void addUserMessagePersistsBothSidesOfTheExchange() {
-        Conversation conversation = new Conversation(new User("Abhishek", "user@example.com", "bcrypt-hash"), "Chat");
+        Conversation conversation = new Conversation(
+                new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash"),
+                "Chat");
         when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));
         when(messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(CONVERSATION_ID)).thenReturn(List.of());
         when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -107,8 +112,43 @@ class ChatServiceTest {
     }
 
     @Test
+    void addUserMessageStreamingForwardsChunksAndPersistsTheCompletedExchange() {
+        Conversation conversation = new Conversation(
+                new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash"),
+                "Chat");
+        when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));
+        when(messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(CONVERSATION_ID)).thenReturn(List.of());
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<String> onTextChunk = invocation.getArgument(1, Consumer.class);
+            onTextChunk.accept("AI ");
+            onTextChunk.accept("reply");
+            return new AiCompletion("AI reply");
+        }).when(aiProvider).generateStream(any(AiChatRequest.class), any());
+
+        List<String> chunks = new ArrayList<>();
+        ChatExchangeResponse response = chatService.addUserMessageStreaming(
+                USER_ID,
+                CONVERSATION_ID,
+                new SendMessageRequest("Hello"),
+                chunks::add);
+
+        assertEquals(List.of("AI ", "reply"), chunks);
+        assertEquals("Hello", response.userMessage().content());
+        assertEquals("AI reply", response.assistantMessage().content());
+
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository, times(2)).save(messageCaptor.capture());
+        assertEquals(MessageRole.ASSISTANT, messageCaptor.getAllValues().get(1).getRole());
+        assertEquals("AI reply", messageCaptor.getAllValues().get(1).getContent());
+    }
+
+    @Test
     void getConversationHistoryReturnsMessagesInRepositoryOrder() {
-        Conversation conversation = new Conversation(new User("Abhishek", "user@example.com", "bcrypt-hash"), "Chat");
+        Conversation conversation = new Conversation(
+                new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash"),
+                "Chat");
         Message firstMessage = new Message(conversation, MessageRole.USER, "Hello");
         Message secondMessage = new Message(conversation, MessageRole.ASSISTANT, "Hi there");
         when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));

@@ -8,6 +8,7 @@ import java.net.http.HttpResponse;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import com.abhiai.abhiai_backend.ai.AiChatMessage;
@@ -23,14 +24,17 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
+@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "openai", matchIfMissing = true)
 public class OpenAiResponsesProvider implements AiProvider {
+    @Override public String providerName(){return "openai";}@Override public String modelName(){return properties.getModel();}@Override public boolean configured(){return properties.getApiKey()!=null&&!properties.getApiKey().isBlank();}
+    @Override public boolean supportsImageUnderstanding(){return true;}
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final OpenAiProperties properties;
 
     public OpenAiResponsesProvider(
-            @Qualifier("openAiHttpClient") HttpClient httpClient,
+            @Qualifier("aiHttpClient") HttpClient httpClient,
             ObjectMapper objectMapper,
             OpenAiProperties properties) {
         this.httpClient = httpClient;
@@ -55,7 +59,7 @@ public class OpenAiResponsesProvider implements AiProvider {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AiProviderException("The AI provider could not complete the request");
+                throw new AiProviderException(providerFailureMessage(response.statusCode()));
             }
 
             return new AiCompletion(extractAssistantText(objectMapper.readTree(response.body())));
@@ -89,18 +93,39 @@ public class OpenAiResponsesProvider implements AiProvider {
         return content.toString();
     }
 
+    private String providerFailureMessage(int statusCode) {
+        return switch (statusCode) {
+            case 401 -> "OpenAI rejected the API key. Check the OPENAI_API_KEY setting.";
+            case 429 -> "OpenAI API quota is exhausted. Add credits or update billing in your OpenAI account.";
+            default -> "The AI provider could not complete the request";
+        };
+    }
+
     private String buildRequestBody(AiChatRequest request) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("model", properties.getModel());
         payload.put("instructions", properties.getInstructions());
         payload.put("store", false);
-        payload.putObject("reasoning").put("effort", properties.getReasoningEffort());
 
         ArrayNode input = payload.putArray("input");
-        for (AiChatMessage message : request.messages()) {
-            input.addObject()
-                    .put("role", message.role().name().toLowerCase(Locale.ROOT))
-                    .put("content", message.content());
+        for (int index = 0; index < request.messages().size(); index++) {
+            AiChatMessage message = request.messages().get(index);
+            ObjectNode item = input.addObject()
+                    .put("role", message.role().name().toLowerCase(Locale.ROOT));
+            if (index == request.messages().size() - 1
+                    && message.role() == com.abhiai.abhiai_backend.entity.MessageRole.USER
+                    && !request.attachments().isEmpty()) {
+                ArrayNode content = item.putArray("content");
+                content.addObject().put("type", "input_text").put("text", message.content());
+                for (var attachment : request.attachments()) {
+                    content.addObject()
+                            .put("type", "input_image")
+                            .put("image_url", "data:" + attachment.contentType() + ";base64,"
+                                    + java.util.Base64.getEncoder().encodeToString(attachment.content()));
+                }
+            } else {
+                item.put("content", message.content());
+            }
         }
 
         return objectMapper.writeValueAsString(payload);

@@ -1,0 +1,1 @@
+package com.abhiai.abhiai_backend.dto.user; import com.abhiai.abhiai_backend.entity.AccountPrivacy;import jakarta.validation.constraints.NotNull;public record AccountPrivacyRequest(@NotNull AccountPrivacy privacy){}

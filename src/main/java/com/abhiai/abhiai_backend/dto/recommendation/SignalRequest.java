@@ -1,0 +1,1 @@
+package com.abhiai.abhiai_backend.dto.recommendation;import java.util.UUID;import jakarta.validation.constraints.*;public record SignalRequest(@NotBlank@Pattern(regexp="VIEW|LIKE|REPLY|REPOST|BOOKMARK|FOLLOW|PROFILE_VISIT|VIDEO_START|VIDEO_COMPLETE|HIDE|NOT_INTERESTED")String type,@NotBlank@Size(max=24)String entityType,@NotNull UUID entityId){}
