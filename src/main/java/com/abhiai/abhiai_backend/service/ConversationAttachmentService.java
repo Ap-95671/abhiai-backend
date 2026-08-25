@@ -29,7 +29,7 @@ import com.abhiai.abhiai_backend.repository.MediaAssetRepository;
 public class ConversationAttachmentService {
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain");
+            "image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain");
 
     private final ConversationRepository conversations;
     private final ConversationAttachmentRepository attachments;
@@ -60,9 +60,12 @@ public class ConversationAttachmentService {
     public ConversationAttachmentResponse upload(UUID userId, UUID conversationId, MultipartFile file) {
         var conversation = conversations.findByIdAndUserId(conversationId, userId)
                 .orElseThrow(ConversationNotFoundException::new);
-        String contentType = file == null ? null : file.getContentType();
-        if (contentType == null || !SUPPORTED_TYPES.contains(contentType.toLowerCase())) {
-            throw new InvalidMediaException("AI chat supports JPEG, PNG, GIF, WebP, PDF, and UTF-8 text attachments");
+        if (file == null || file.isEmpty()) {
+            throw new InvalidMediaException("Choose a file to upload");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !SUPPORTED_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+            throw new InvalidMediaException("AI chat supports JPEG, PNG, WebP, PDF, and UTF-8 text attachments");
         }
 
         var uploaded = mediaService.uploadAttachment(userId, file);
@@ -133,11 +136,11 @@ public class ConversationAttachmentService {
             List<UUID> attachmentIds,
             boolean externalProcessingAllowed,
             Message message) {
-        List<ConversationAttachment> selected = claimForMessage(conversationId, attachmentIds, message);
-        if (!selected.isEmpty() && !externalProcessingAllowed) {
+        if (attachmentIds != null && !attachmentIds.isEmpty() && !externalProcessingAllowed) {
             throw new InvalidMediaException(
                     "Confirm external AI processing before sending conversation attachments");
         }
+        List<ConversationAttachment> selected = claimForMessage(conversationId, attachmentIds, message);
 
         List<AiInputAttachment> images = new ArrayList<>();
         for (ConversationAttachment attachment : selected) {
