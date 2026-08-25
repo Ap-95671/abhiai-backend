@@ -1,241 +1,205 @@
 # AbhiAI Backend
 
-AbhiAI is a Spring Boot 4 modular monolith combining authenticated AI chat with an
-incrementally developed social platform.
+Production-oriented Java backend for **AbhiAI**: an authenticated, multi-model AI assistant and social platform. The service keeps AI vendors behind internal provider contracts so the web and future mobile clients can remain unchanged as providers evolve or Abhena capabilities are introduced.
 
-## Current backend features
+> **Status:** active development. Core authentication, conversations, multimodal foundations, model routing, and the social platform are implemented. Production hardening and Abhena research are tracked in the public [AbhiAI Development Roadmap](https://github.com/users/Ap-95671/projects/2).
 
-- User registration and BCrypt password hashing
-- Stateless JWT login and authorization
-- PostgreSQL persistence managed by Flyway
-- Stored AI conversations and messages
-- Pluggable AI providers with streaming support
-- Social user profiles with configurable, case-insensitive usernames
-- Follow and unfollow relationships with transactional social counters
-- Text posts with visibility rules, author ownership, and soft deletion
-- Paginated chronological home feed backed by a replaceable feed strategy
-- Post likes and paginated replies with transactional counters
-- Reposts and private, visibility-aware bookmark collections
-- Durable social notifications with per-user read state
-- Visibility-aware PostgreSQL full-text post search and profile search
+## Highlights
 
-## Social profile API
+- JWT authentication with BCrypt password hashing and ownership-aware authorization
+- PostgreSQL persistence with 32 versioned Flyway migrations
+- Stored conversations, messages, streaming responses, and generation cancellation
+- Provider-independent model registry, availability catalog, manual selection, routing, and fallback
+- Adapters for OpenAI-compatible providers, Gemini, Groq, Ollama, Anthropic, xAI, DeepSeek, Mistral, Cohere, and OpenRouter
+- Image, PDF, and text attachments with extraction, contextual retrieval, and local embeddings
+- Gemini-backed image generation behind an internal provider contract
+- Profiles, follows, posts, feeds, replies, likes, reposts, bookmarks, notifications, and search
+- Direct messages, groups, communities, stories, video, hashtags, mentions, polls, articles, analytics, and moderation
+- Local or S3-compatible media storage for AWS S3, Cloudflare R2, and compatible services
+- Structured validation and centralized exception handling
+- Spring Boot Actuator health probes and a broad automated test suite
 
-All current profile endpoints require a bearer access token. The acting user is
-always taken from the validated JWT; clients cannot provide a user ID to edit
-another account.
+## Architecture
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | /api/v1/users/{username} | Find a profile by username |
-| GET | /api/v1/users/me | Read the authenticated user's profile |
-| PATCH | /api/v1/users/me/profile | Update the authenticated user's profile |
-
-Profile responses never include password hashes, JWT data, or email addresses.
-Verification status and social counters are read-only and cannot be changed by
-the profile update API.
-
-## Follow API
-
-All follow operations derive the acting user from the validated JWT. Follower and
-following collections are paginated, capped at 100 records per page, and ordered
-newest first.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | /api/v1/users/{userId}/follow | Follow another user |
-| DELETE | /api/v1/users/{userId}/follow | Unfollow another user |
-| GET | /api/v1/users/{userId}/follow-status | Check the current user's relationship |
-| GET | /api/v1/users/{userId}/followers | Get a paginated follower list |
-| GET | /api/v1/users/{userId}/following | Get a paginated following list |
-
-Self-following and duplicate relationships are rejected. PostgreSQL constraints
-provide a second integrity layer, and follower/following counters are updated
-atomically in the same transaction as the relationship.
-
-## Post API
-
-Post text is limited by the app.social.posts.max-text-length configuration
-property, currently 1000 Unicode characters. Visibility can be PUBLIC,
-FOLLOWERS, or PRIVATE.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | /api/v1/posts | Create a text post |
-| GET | /api/v1/posts/{postId} | Read a visible active post |
-| PATCH | /api/v1/posts/{postId} | Edit an owned post |
-| DELETE | /api/v1/posts/{postId} | Soft-delete an owned post |
-
-Only authors can edit or delete posts. Followers-only visibility is checked
-against the persisted follow graph. Deleted posts return 404 and remain stored
-so future replies, moderation records, and analytics do not lose referential
-integrity. Profile post counters are updated atomically.
-
-## Home feed API
-
-The home feed is authenticated, paginated, capped at 100 posts per page, and
-ordered by creation time and post ID in descending order for stable pagination.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | /api/v1/feed?page=0&size=20 | Get the authenticated user's home feed |
-
-The feed contains the authenticated user's own active posts at every visibility
-level, plus active PUBLIC and FOLLOWERS posts from accounts they follow. It
-excludes private posts belonging to other users, posts from unrelated accounts,
-and soft-deleted posts.
-
-`FeedService` depends on the `FeedStrategy` interface. Phase 4 uses the
-chronological implementation; a future recommendation strategy can be selected
-without changing the controller or response contract.
-
-## Post interaction API
-
-All interaction endpoints require JWT authentication and reuse the parent post's
-visibility rules. Like and reply lists are capped at 100 records per page and use
-stable newest-first ordering.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | /api/v1/posts/{postId}/likes | Like a visible post |
-| DELETE | /api/v1/posts/{postId}/likes | Remove the current user's like |
-| GET | /api/v1/posts/{postId}/likes/status | Get the current user's like status |
-| GET | /api/v1/posts/{postId}/likes?page=0&size=20 | List users who liked the post |
-| POST | /api/v1/posts/{postId}/replies | Create a reply on a visible post |
-| GET | /api/v1/posts/{postId}/replies?page=0&size=20 | List active replies |
-| DELETE | /api/v1/posts/{postId}/replies/{replyId} | Soft-delete an owned reply |
-
-The database prevents duplicate likes and the API returns HTTP 409 for a second
-like. Reply text uses the same configured Unicode character limit as post text.
-Like and reply counters are updated atomically in the same transactions as their
-interactions. Replies inherit access from the parent post and deleted replies are
-excluded from lists while remaining available for future moderation records.
-
-## Repost and bookmark API
-
-Reposts are visible interaction metadata. Bookmarks are private: only the
-authenticated user can retrieve their own bookmark collection, and there is no
-API for listing another user's bookmarks or the users who bookmarked a post.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | /api/v1/posts/{postId}/reposts | Repost a visible post |
-| DELETE | /api/v1/posts/{postId}/reposts | Remove the current user's repost |
-| GET | /api/v1/posts/{postId}/reposts/status | Get the current user's repost status |
-| GET | /api/v1/posts/{postId}/reposts?page=0&size=20 | List users who reposted the post |
-| POST | /api/v1/posts/{postId}/bookmarks | Privately bookmark a visible post |
-| DELETE | /api/v1/posts/{postId}/bookmarks | Remove the current user's bookmark |
-| GET | /api/v1/posts/{postId}/bookmarks/status | Get the current user's bookmark status |
-| GET | /api/v1/bookmarks?page=0&size=20 | Get the current user's private bookmarks |
-
-Both interactions are unique per user and post, return HTTP 409 when duplicated,
-and update post counters atomically. Bookmark results exclude deleted posts and
-posts the current user can no longer view. Repost events are stored for future
-profile and feed-item features; Phase 6 does not change the existing home-feed
-`PostResponse` contract.
-
-## Notification API
-
-Notifications are durable PostgreSQL records scoped to their recipient. Follow,
-like, reply, and repost actions create notifications for the affected account;
-self-actions do not create notifications. Results use stable newest-first
-pagination and are capped at 100 records per page.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | /api/v1/notifications?page=0&size=20 | List the current user's notifications |
-| GET | /api/v1/notifications/unread-count | Get the current user's unread count |
-| PATCH | /api/v1/notifications/{notificationId}/read | Mark one owned notification as read |
-| PATCH | /api/v1/notifications/read-all | Mark all current notifications as read |
-
-A notification cannot be read through another user's account. The API returns
-404 instead of revealing whether another user's notification ID exists.
-
-## Search API
-
-Search requires JWT authentication. Queries are trimmed and must contain between
-2 and 100 Unicode characters. User search matches case-insensitive username or
-display-name prefixes. Post search uses a generated PostgreSQL `tsvector` column
-and GIN index, with relevance followed by newest-first stable ordering.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | /api/v1/search/users?q=abhi&page=0&size=20 | Search profiles by username or display name |
-| GET | /api/v1/search/posts?q=artificial+intelligence&page=0&size=20 | Search visible active posts |
-
-Post results enforce the same access model as direct post reads: public posts are
-searchable by authenticated users, followers-only posts require an active follow,
-and private posts are visible only to their author. Soft-deleted posts are never
-returned. Search pages are capped at 50 results.
-
-## Run and verify
-
-From the backend directory:
-
-    ./mvnw test
-    ./mvnw spring-boot:run
-
-From the AbhiAI project directory:
-
-    docker compose up -d --build
-
-Health is available at http://localhost:8080/actuator/health.
-
-## Social roadmap
-
-1. Social profiles — implemented
-2. Follow relationships with pagination — implemented
-3. Text posts — implemented
-4. Chronological home feed — implemented
-5. Likes and replies — implemented
-6. Reposts and private bookmarks — implemented
-7. Notifications and search foundations — implemented
-
-Media, communities, messaging, recommendations, and AI/social integrations will
-be added only after the core social graph is stable.
-
-## Free-tier production deployment
-
-The production target is a Render Free Docker web service connected to `main`.
-The versioned `render.yaml` uses Java 21, generates the JWT secret inside
-Render, checks `GET /actuator/health`, and deploys every new commit.
-
-The production database is Neon PostgreSQL. Provide its pooled connection in
-JDBC form with SSL enabled:
+AbhiAI is currently a modular monolith. Package boundaries keep business capabilities separable without introducing premature distributed-system complexity.
 
 ```text
-jdbc:postgresql://<pooled-neon-host>/<database>?sslmode=require
+HTTP request
+    │
+    ▼
+Controller ── DTO validation / authentication boundary
+    │
+    ▼
+Service ───── business rules and transactions
+    │
+    ├── Repository ── JPA / PostgreSQL
+    ├── AI provider contracts ── external models or future Abhena
+    └── Storage contracts ── local or S3-compatible media
 ```
 
-Required Render variables:
+Key source areas:
 
-- `SPRING_PROFILES_ACTIVE`
-- `DATABASE_URL`
-- `DATABASE_USERNAME`
-- `DATABASE_PASSWORD`
-- `JWT_SECRET`
-- `ALLOWED_ORIGINS`
-- `AI_PROVIDER` (legacy compatibility default)
-- one or more provider keys, such as `GEMINI_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
+```text
+src/main/java/com/abhiai/abhiai_backend/
+├── controller/     REST endpoints only
+├── service/        business workflows and transactional rules
+├── repository/     database access
+├── entity/         persisted domain models
+├── dto/            request and response contracts
+├── security/       JWT authentication and authorization
+├── ai/             model registry, routing, tools, and provider adapters
+├── config/         application and infrastructure configuration
+└── exception/      structured API errors
+```
 
-Persistent uploads use Supabase Storage through the existing S3-compatible
-storage layer. Set `MEDIA_STORAGE_TYPE=s3` and
-`MEDIA_S3_PROVIDER=S3_COMPATIBLE`, then configure:
+The frontend depends on stable AbhiAI API contracts, not vendor SDKs. A future Abhena implementation can therefore implement the same internal model-provider boundary.
 
-- `MEDIA_S3_BUCKET`
-- `MEDIA_S3_ENDPOINT`
-- `MEDIA_S3_REGION`
-- `MEDIA_S3_PATH_STYLE=true`
-- `MEDIA_S3_CHUNKED_ENCODING=false`
-- `MEDIA_S3_ACCESS_KEY`
-- `MEDIA_S3_SECRET_KEY`
+## Technology
 
-Credentials remain in Render's secret store and must never be added to GitHub.
-Using `MEDIA_STORAGE_TYPE=local` temporarily works, but uploads can be lost when
-the free Render instance restarts or redeploys.
+- Java 21
+- Spring Boot 4.0.7
+- Spring Security and JJWT
+- Spring Data JPA / Hibernate
+- PostgreSQL and Flyway
+- Apache PDFBox
+- AWS SDK for S3-compatible storage
+- Maven Wrapper
+- Docker
 
-Set `ALLOWED_ORIGINS` to the exact Vercel HTTPS origin. Multiple exact origins
-can be comma-separated when adding a custom domain. Production intentionally
-fails fast if required database, JWT, CORS, selected provider, or enabled S3
-configuration is missing. Flyway runs before Hibernate schema validation;
-production never uses `ddl-auto=update`.
+## Local development
+
+### Prerequisites
+
+- Java 21
+- PostgreSQL 17 or a compatible PostgreSQL release
+- Docker Desktop (optional, for the composed stack)
+
+### 1. Create the database
+
+```sql
+CREATE DATABASE abhiai;
+```
+
+### 2. Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`, use a long random JWT secret, and add at least one AI provider key if chat generation is required. `.env` is ignored by Git and must never be committed.
+
+For a direct Maven run, export the file into the current shell:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+### 3. Run migrations and start the API
+
+```bash
+./mvnw spring-boot:run
+```
+
+Flyway applies migrations before Hibernate validates the schema. The API starts on `http://localhost:8080` and health is available at:
+
+```text
+http://localhost:8080/actuator/health
+```
+
+### Docker
+
+From the parent AbhiAI workspace containing `docker-compose.yml`:
+
+```bash
+docker compose up -d --build
+```
+
+## Verification
+
+```bash
+./mvnw test
+```
+
+The audited main branch passes **185 backend tests**. New provider adapters should also satisfy provider contract tests as that production-quality gate is implemented.
+
+## API areas
+
+All application APIs are versioned under `/api/v1`.
+
+| Area | Examples |
+| --- | --- |
+| Authentication | registration, login, JWT-protected sessions |
+| AI chat | conversations, messages, streaming, cancellation, model catalog |
+| Multimodal | attachments, document extraction, contextual retrieval, image generation |
+| Social graph | profiles, follows, blocks, mutes, recommendations |
+| Publishing | posts, replies, reposts, bookmarks, polls, articles, media |
+| Community | feeds, search, notifications, messaging, groups, communities, stories |
+| Safety | reporting, moderation, visibility and ownership policies |
+
+See the controllers and DTOs for the exact current request/response contracts. Secrets, password hashes, and internal provider credentials are never part of response DTOs.
+
+## AI provider configuration
+
+Provider credentials are server-side environment variables. Configure only the providers you intend to expose.
+
+| Provider | Key variable |
+| --- | --- |
+| OpenAI | `OPENAI_API_KEY` |
+| Gemini | `GEMINI_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| xAI | `XAI_API_KEY` |
+| DeepSeek | `DEEPSEEK_API_KEY` |
+| Mistral | `MISTRAL_API_KEY` |
+| Cohere | `COHERE_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| Ollama | no cloud key; configure `OLLAMA_BASE_URL` |
+
+An empty or missing key keeps that provider unavailable. The model catalog must not advertise an unconfigured provider as ready.
+
+## Media storage
+
+Development can use `MEDIA_STORAGE_TYPE=local`. Production should use `MEDIA_STORAGE_TYPE=s3` with the bucket, region, endpoint, and credentials stored in the deployment platform's secret manager. The existing S3-compatible layer supports services such as Cloudflare R2 through custom endpoint and path-style settings.
+
+## Security
+
+- Never commit `.env`, database credentials, JWT secrets, provider keys, or storage keys.
+- Use an environment-specific JWT secret of at least 32 random characters.
+- Set `ALLOWED_ORIGINS` to exact trusted HTTPS origins in production.
+- Production uses Flyway plus `ddl-auto=validate`; do not switch to automatic schema mutation.
+- Treat uploaded files as untrusted and retain size/type limits.
+- Rotate any credential immediately if it is ever exposed in Git history, logs, or screenshots.
+
+To report a vulnerability, avoid public issue details and contact the repository owner privately first.
+
+## Deployment
+
+The repository includes Docker and Render configuration. A typical production topology is:
+
+```text
+Vercel web client ──HTTPS──▶ Render backend ──▶ managed PostgreSQL
+                                      ├──────▶ AI providers
+                                      └──────▶ S3 / R2 media storage
+```
+
+Production values belong in Render/Vercel environment settings, never in source control. The backend fails fast when required production database, JWT, CORS, provider, or enabled storage configuration is missing.
+
+## Roadmap and contributing
+
+- [Development Roadmap](https://github.com/users/Ap-95671/projects/2)
+- [Backend issues](https://github.com/Ap-95671/abhiai-backend/issues)
+- [Frontend repository](https://github.com/Ap-95671/abhiai-frontend)
+
+Before opening a pull request:
+
+1. Link the relevant roadmap issue.
+2. Keep controllers thin and business rules in services.
+3. Use DTOs at API boundaries and migrations for schema changes.
+4. Add or update proportionate automated tests.
+5. Run `./mvnw test` and confirm no secrets or generated files are staged.
+
+## License
+
+No open-source license has been selected yet. All rights are reserved by the project owner until a license file is added.
