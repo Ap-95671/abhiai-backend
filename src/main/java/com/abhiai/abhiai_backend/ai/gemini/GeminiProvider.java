@@ -8,13 +8,12 @@ import java.net.http.HttpResponse;
 import java.util.function.Consumer;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import com.abhiai.abhiai_backend.ai.AiChatMessage;
 import com.abhiai.abhiai_backend.ai.AiChatRequest;
 import com.abhiai.abhiai_backend.ai.AiCompletion;
-import com.abhiai.abhiai_backend.ai.AiProvider;
+import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.entity.MessageRole;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
 import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
@@ -25,8 +24,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
-@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "gemini")
-public class GeminiProvider implements AiProvider {
+public class GeminiProvider implements ModelProvider {
     @Override public boolean supportsImageUnderstanding(){return true;}
     @Override public String providerName(){return "gemini";}@Override public String modelName(){return properties.getModel();}@Override public boolean configured(){return properties.getApiKey()!=null&&!properties.getApiKey().isBlank();}
 
@@ -50,7 +48,7 @@ public class GeminiProvider implements AiProvider {
         }
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
-                .uri(URI.create(generateContentUrl()))
+                .uri(URI.create(generateContentUrl(request)))
                 .timeout(properties.getRequestTimeout())
                 .header("x-goog-api-key", properties.getApiKey())
                 .header("Content-Type", "application/json")
@@ -77,7 +75,7 @@ public class GeminiProvider implements AiProvider {
             throw new AiProviderUnavailableException();
         }
         HttpRequest httpRequest = HttpRequest.newBuilder()
-                .uri(URI.create(streamGenerateContentUrl()))
+                .uri(URI.create(streamGenerateContentUrl(request)))
                 .timeout(properties.getRequestTimeout())
                 .header("x-goog-api-key", properties.getApiKey())
                 .header("Content-Type", "application/json")
@@ -166,13 +164,13 @@ public class GeminiProvider implements AiProvider {
         return objectMapper.writeValueAsString(payload);
     }
 
-    private String generateContentUrl() {
+    private String generateContentUrl(AiChatRequest request) {
         String baseUrl = properties.getBaseUrl();
         return (baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl)
-                + "/models/" + properties.getModel() + ":generateContent";
+                + "/models/" + (request.providerModelId() == null ? properties.getModel() : request.providerModelId()) + ":generateContent";
     }
 
-    private String streamGenerateContentUrl() {
-        return generateContentUrl().replace(":generateContent", ":streamGenerateContent?alt=sse");
+    private String streamGenerateContentUrl(AiChatRequest request) {
+        return generateContentUrl(request).replace(":generateContent", ":streamGenerateContent?alt=sse");
     }
 }

@@ -30,6 +30,7 @@ import com.abhiai.abhiai_backend.dto.chat.ConversationSummaryResponse;
 import com.abhiai.abhiai_backend.dto.chat.CreateConversationRequest;
 import com.abhiai.abhiai_backend.dto.chat.RenameConversationRequest;
 import com.abhiai.abhiai_backend.dto.chat.SendMessageRequest;
+import com.abhiai.abhiai_backend.dto.chat.UpdateModelPreferenceRequest;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
 import com.abhiai.abhiai_backend.security.JwtPrincipal;
 import com.abhiai.abhiai_backend.service.ChatService;
@@ -77,6 +78,14 @@ public class ChatController {
             @PathVariable UUID conversationId,
             @Valid @RequestBody RenameConversationRequest request) {
         return ResponseEntity.ok(chatService.renameConversation(principal.userId(), conversationId, request));
+    }
+
+    @PatchMapping("/{conversationId}/model")
+    public ResponseEntity<ConversationSummaryResponse> updateModelPreference(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable UUID conversationId,
+            @Valid @RequestBody UpdateModelPreferenceRequest request) {
+        return ResponseEntity.ok(chatService.updateModelPreference(principal.userId(), conversationId, request));
     }
 
     @DeleteMapping("/{conversationId}")
@@ -150,7 +159,7 @@ public class ChatController {
     }
 
     private String safeMessage(Exception exception) {
-        return exception instanceof AiProviderException
+        return exception instanceof AiProviderException || exception instanceof com.abhiai.abhiai_backend.exception.ModelRoutingException
                 ? exception.getMessage()
                 : "Chat generation failed";
     }

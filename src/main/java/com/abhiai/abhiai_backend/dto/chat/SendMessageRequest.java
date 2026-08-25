@@ -16,9 +16,16 @@ public record SendMessageRequest(
 
         boolean externalProcessingAllowed,
 
-        boolean webSearchAllowed) {
+        boolean webSearchAllowed,
+
+        String selectionMode,
+
+        @Size(max = 160, message = "Model ID must not exceed 160 characters")
+        String selectedModelId,
+
+        Boolean fallbackAllowed) {
 
     public SendMessageRequest(String content) {
-        this(content, List.of(), false, false);
+        this(content, List.of(), false, false, null, null, null);
     }
 }

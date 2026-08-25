@@ -8,13 +8,12 @@ import java.net.http.HttpResponse;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import com.abhiai.abhiai_backend.ai.AiChatMessage;
 import com.abhiai.abhiai_backend.ai.AiChatRequest;
 import com.abhiai.abhiai_backend.ai.AiCompletion;
-import com.abhiai.abhiai_backend.ai.AiProvider;
+import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
 import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
 
@@ -24,8 +23,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
-@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "groq")
-public class GroqProvider implements AiProvider {
+public class GroqProvider implements ModelProvider {
     @Override public String providerName(){return "groq";}@Override public String modelName(){return properties.getModel();}@Override public boolean configured(){return properties.getApiKey()!=null&&!properties.getApiKey().isBlank();}
 
     private final HttpClient httpClient;
@@ -79,7 +77,7 @@ public class GroqProvider implements AiProvider {
 
     private String buildRequestBody(AiChatRequest request) {
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("model", properties.getModel());
+        payload.put("model", request.providerModelId() == null ? properties.getModel() : request.providerModelId());
         ArrayNode messages = payload.putArray("messages");
         messages.addObject().put("role", "system").put("content", properties.getInstructions());
         for (AiChatMessage message : request.messages()) {

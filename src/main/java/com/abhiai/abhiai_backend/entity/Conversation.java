@@ -22,6 +22,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import com.abhiai.abhiai_backend.ai.orchestration.SelectionMode;
 
 @Entity
 @Table(name = "conversations", indexes = {
@@ -45,6 +48,13 @@ private List<Message> messages = new ArrayList<>();
 
     @Column(nullable = false, length = 255)
     private String title;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "model_selection_mode", nullable = false, length = 16)
+    private SelectionMode modelSelectionMode = SelectionMode.AUTO;
+
+    @Column(name = "preferred_model_id", length = 160)
+    private String preferredModelId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -70,6 +80,12 @@ private List<Message> messages = new ArrayList<>();
     this.updatedAt = Instant.now();
     }
 
+    public void selectModel(SelectionMode mode, String modelId) {
+        this.modelSelectionMode = mode == null ? SelectionMode.AUTO : mode;
+        this.preferredModelId = this.modelSelectionMode == SelectionMode.AUTO ? null : modelId;
+        touch();
+    }
+
     public UUID getId() {
         return id;
     }
@@ -85,4 +101,6 @@ private List<Message> messages = new ArrayList<>();
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+    public SelectionMode getModelSelectionMode() { return modelSelectionMode; }
+    public String getPreferredModelId() { return preferredModelId; }
 }

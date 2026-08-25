@@ -39,6 +39,19 @@ public class Message {
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
+    @Column(name = "ai_provider", length = 64)
+    private String aiProvider;
+    @Column(name = "ai_model", length = 160)
+    private String aiModel;
+    @Column(name = "input_tokens")
+    private Integer inputTokens;
+    @Column(name = "output_tokens")
+    private Integer outputTokens;
+    @Column(name = "latency_ms")
+    private Long latencyMs;
+    @Column(name = "fallback_used")
+    private Boolean fallbackUsed;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -50,6 +63,15 @@ public class Message {
         this.conversation = conversation;
         this.role = role;
         this.content = content;
+    }
+
+    public void applyAiMetadata(com.abhiai.abhiai_backend.ai.AiCompletion completion) {
+        this.aiProvider = completion.provider();
+        this.aiModel = completion.model();
+        this.inputTokens = completion.inputTokens();
+        this.outputTokens = completion.outputTokens();
+        this.latencyMs = completion.latencyMs();
+        this.fallbackUsed = completion.fallbackUsed();
     }
     
 
@@ -68,4 +90,10 @@ public class Message {
     public Instant getCreatedAt() {
         return createdAt;
     }
+    public String getAiProvider() { return aiProvider; }
+    public String getAiModel() { return aiModel; }
+    public Integer getInputTokens() { return inputTokens; }
+    public Integer getOutputTokens() { return outputTokens; }
+    public Long getLatencyMs() { return latencyMs; }
+    public Boolean getFallbackUsed() { return fallbackUsed; }
 }

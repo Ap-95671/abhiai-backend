@@ -12,7 +12,13 @@ public record MessageResponse(
         MessageRole role,
         String content,
         Instant createdAt,
-        List<ConversationAttachmentResponse> attachments) {
+        List<ConversationAttachmentResponse> attachments,
+        String provider,
+        String model,
+        Integer inputTokens,
+        Integer outputTokens,
+        Long latencyMs,
+        boolean fallbackUsed) {
 
     public static MessageResponse from(Message message) {
         return new MessageResponse(
@@ -20,7 +26,8 @@ public record MessageResponse(
                 message.getRole(),
                 message.getContent(),
                 message.getCreatedAt(),
-                List.of());
+                List.of(), message.getAiProvider(), message.getAiModel(), message.getInputTokens(),
+                message.getOutputTokens(), message.getLatencyMs(), Boolean.TRUE.equals(message.getFallbackUsed()));
     }
 
     public static MessageResponse from(Message message, List<ConversationAttachmentResponse> attachments) {
@@ -29,6 +36,7 @@ public record MessageResponse(
                 message.getRole(),
                 message.getContent(),
                 message.getCreatedAt(),
-                List.copyOf(attachments));
+                List.copyOf(attachments), message.getAiProvider(), message.getAiModel(), message.getInputTokens(),
+                message.getOutputTokens(), message.getLatencyMs(), Boolean.TRUE.equals(message.getFallbackUsed()));
     }
 }

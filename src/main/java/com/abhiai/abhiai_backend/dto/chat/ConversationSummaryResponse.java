@@ -9,13 +9,17 @@ public record ConversationSummaryResponse(
         UUID id,
         String title,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        String modelSelectionMode,
+        String preferredModelId) {
 
     public static ConversationSummaryResponse from(Conversation conversation) {
         return new ConversationSummaryResponse(
                 conversation.getId(),
                 conversation.getTitle(),
                 conversation.getCreatedAt(),
-                conversation.getUpdatedAt());
+                conversation.getUpdatedAt(),
+                conversation.getModelSelectionMode().name(),
+                conversation.getPreferredModelId());
     }
 }

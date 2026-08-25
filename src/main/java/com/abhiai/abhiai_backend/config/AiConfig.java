@@ -14,6 +14,10 @@ import com.abhiai.abhiai_backend.ai.groq.GroqProperties;
 import com.abhiai.abhiai_backend.ai.ollama.OllamaProperties;
 import com.abhiai.abhiai_backend.ai.openai.OpenAiProperties;
 import com.abhiai.abhiai_backend.ai.image.GeminiImageGenerationProperties;
+import com.abhiai.abhiai_backend.ai.ModelProvider;
+import com.abhiai.abhiai_backend.ai.provider.AnthropicModelProvider;
+import com.abhiai.abhiai_backend.ai.provider.OpenAiCompatibleModelProvider;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableConfigurationProperties({
@@ -23,7 +27,8 @@ import com.abhiai.abhiai_backend.ai.image.GeminiImageGenerationProperties;
         OllamaProperties.class,
         GeminiImageGenerationProperties.class,
         AiContextProperties.class,
-        WebSearchProperties.class
+        WebSearchProperties.class,
+        MultiProviderProperties.class
 })
 public class AiConfig {
 
@@ -38,5 +43,27 @@ public class AiConfig {
     public ExecutorService aiStreamingExecutor() {
         int threadCount = Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors()));
         return Executors.newFixedThreadPool(threadCount);
+    }
+
+    @Bean ModelProvider anthropicProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {
+        return new AnthropicModelProvider(aiHttpClient, mapper, properties.provider("anthropic"));
+    }
+    @Bean ModelProvider xaiProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {
+        return compatible("xai", aiHttpClient, mapper, properties);
+    }
+    @Bean ModelProvider deepseekProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {
+        return compatible("deepseek", aiHttpClient, mapper, properties);
+    }
+    @Bean ModelProvider mistralProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {
+        return compatible("mistral", aiHttpClient, mapper, properties);
+    }
+    @Bean ModelProvider cohereProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {
+        return compatible("cohere", aiHttpClient, mapper, properties);
+    }
+    @Bean ModelProvider openrouterProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {
+        return compatible("openrouter", aiHttpClient, mapper, properties);
+    }
+    private ModelProvider compatible(String name, HttpClient client, ObjectMapper mapper, MultiProviderProperties properties) {
+        return new OpenAiCompatibleModelProvider(name, client, mapper, properties.provider(name));
     }
 }

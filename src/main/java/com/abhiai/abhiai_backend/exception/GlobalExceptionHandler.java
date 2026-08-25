@@ -305,6 +305,17 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(ModelRoutingException.class)
+    public ResponseEntity<ApiError> handleModelRouting(ModelRoutingException exception, WebRequest request) {
+        HttpStatus status = switch (exception.getCode()) {
+            case "MODEL_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+            case "MODEL_REQUIRED", "INVALID_SELECTION_MODE", "CAPABILITY_MISMATCH" -> HttpStatus.BAD_REQUEST;
+            case "MODEL_COMING_SOON" -> HttpStatus.CONFLICT;
+            default -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+        return buildResponse(status, exception.getMessage(), request, Map.of("code", exception.getCode()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(
             MethodArgumentNotValidException exception,

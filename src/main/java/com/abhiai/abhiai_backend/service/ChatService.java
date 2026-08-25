@@ -19,6 +19,9 @@ import com.abhiai.abhiai_backend.dto.chat.CreateConversationRequest;
 import com.abhiai.abhiai_backend.dto.chat.MessageResponse;
 import com.abhiai.abhiai_backend.dto.chat.SendMessageRequest;
 import com.abhiai.abhiai_backend.dto.chat.RenameConversationRequest;
+import com.abhiai.abhiai_backend.dto.chat.UpdateModelPreferenceRequest;
+import com.abhiai.abhiai_backend.ai.orchestration.SelectionMode;
+import com.abhiai.abhiai_backend.exception.ModelRoutingException;
 import com.abhiai.abhiai_backend.entity.Conversation;
 import com.abhiai.abhiai_backend.entity.Message;
 import com.abhiai.abhiai_backend.entity.MessageRole;
@@ -99,6 +102,17 @@ public class ChatService {
         conversationRepository.delete(conversation);
     }
 
+    @Transactional
+    public ConversationSummaryResponse updateModelPreference(UUID userId, UUID conversationId, UpdateModelPreferenceRequest request) {
+        Conversation conversation = findConversationOwnedByUser(userId, conversationId);
+        SelectionMode mode = parseSelectionMode(request.selectionMode());
+        if (mode == SelectionMode.MANUAL && (request.selectedModelId() == null || request.selectedModelId().isBlank())) {
+            throw new ModelRoutingException("MODEL_REQUIRED", "Select a model when using Manual mode.");
+        }
+        conversation.selectModel(mode, request.selectedModelId());
+        return ConversationSummaryResponse.from(conversation);
+    }
+
     @Transactional(readOnly = true)
     public List<ConversationSummaryResponse> getConversations(UUID userId) {
         return conversationRepository.findAllByUserIdOrderByUpdatedAtDesc(userId).stream()
@@ -125,8 +139,10 @@ public class ChatService {
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
         AiCompletion completion = aiProvider.generate(
-                prepareAiRequest(conversationId, history, userMessage, request));
-        Message assistantMessage = messageRepository.save(new Message(conversation, MessageRole.ASSISTANT, completion.content()));
+                prepareAiRequest(conversation, history, userMessage, request));
+        Message assistantMessage = new Message(conversation, MessageRole.ASSISTANT, completion.content());
+        assistantMessage.applyAiMetadata(completion);
+        assistantMessage = messageRepository.save(assistantMessage);
         conversation.touch();
         return new ChatExchangeResponse(
                 messageResponse(userMessage),
@@ -148,12 +164,14 @@ public class ChatService {
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
 
         AiCompletion completion = aiProvider.generateStream(
-                prepareAiRequest(conversationId, history, userMessage, request),
+                prepareAiRequest(conversation, history, userMessage, request),
                 onTextChunk);
-        Message assistantMessage = messageRepository.save(new Message(
+        Message assistantMessage = new Message(
                 conversation,
                 MessageRole.ASSISTANT,
-                completion.content()));
+                completion.content());
+        assistantMessage.applyAiMetadata(completion);
+        assistantMessage = messageRepository.save(assistantMessage);
         conversation.touch();
 
         return new ChatExchangeResponse(
@@ -168,21 +186,22 @@ public class ChatService {
     }
 
     private AiChatRequest prepareAiRequest(
-            UUID conversationId,
+            Conversation conversation,
             List<Message> history,
             Message userMessage,
             SendMessageRequest request) {
         if (attachmentService == null) {
-            return new AiChatRequest(contextBuilder.build(
+            applyRequestedPreference(conversation, request);
+            return routedRequest(contextBuilder.build(
                     history,
-                    new AiChatMessage(userMessage.getRole(), userMessage.getContent())));
+                    new AiChatMessage(userMessage.getRole(), userMessage.getContent())), List.of(), conversation, request);
         }
 
         String prompt = toolRegistry == null
                 ? request.content()
                 : toolRegistry.augmentPrompt(request.content(), request.webSearchAllowed());
         var prepared = attachmentService.prepareForMessage(
-                conversationId,
+                conversation.getId(),
                 prompt,
                 request.attachmentIds(),
                 request.externalProcessingAllowed(),
@@ -194,7 +213,30 @@ public class ChatService {
         List<AiChatMessage> messages = contextBuilder.build(
                 history,
                 new AiChatMessage(userMessage.getRole(), prepared.prompt()));
-        return new AiChatRequest(messages, prepared.images());
+        applyRequestedPreference(conversation, request);
+        return routedRequest(messages, prepared.images(), conversation, request);
+    }
+
+    private AiChatRequest routedRequest(List<AiChatMessage> messages,
+                                        List<com.abhiai.abhiai_backend.ai.AiInputAttachment> attachments,
+                                        Conversation conversation,
+                                        SendMessageRequest request) {
+        boolean fallback = request.fallbackAllowed() == null || request.fallbackAllowed();
+        return new AiChatRequest(messages, attachments, conversation.getModelSelectionMode().name(),
+                conversation.getPreferredModelId(), fallback, null);
+    }
+
+    private void applyRequestedPreference(Conversation conversation, SendMessageRequest request) {
+        if (request.selectionMode() == null || request.selectionMode().isBlank()) return;
+        SelectionMode mode = parseSelectionMode(request.selectionMode());
+        if (mode == SelectionMode.MANUAL && (request.selectedModelId() == null || request.selectedModelId().isBlank()))
+            throw new ModelRoutingException("MODEL_REQUIRED", "Select a model when using Manual mode.");
+        conversation.selectModel(mode, request.selectedModelId());
+    }
+
+    private SelectionMode parseSelectionMode(String value) {
+        try { return SelectionMode.valueOf(value.toUpperCase(java.util.Locale.ROOT)); }
+        catch (IllegalArgumentException exception) { throw new ModelRoutingException("INVALID_SELECTION_MODE", "Selection mode must be AUTO or MANUAL."); }
     }
 
     private String normalizeTitle(String title) {

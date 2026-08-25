@@ -11,6 +11,8 @@ public record ConversationDetailResponse(
         String title,
         Instant createdAt,
         Instant updatedAt,
+        String modelSelectionMode,
+        String preferredModelId,
         List<MessageResponse> messages) {
 
     public static ConversationDetailResponse from(Conversation conversation, List<MessageResponse> messages) {
@@ -19,6 +21,8 @@ public record ConversationDetailResponse(
                 conversation.getTitle(),
                 conversation.getCreatedAt(),
                 conversation.getUpdatedAt(),
+                conversation.getModelSelectionMode().name(),
+                conversation.getPreferredModelId(),
                 messages);
     }
 }

@@ -215,8 +215,8 @@ Required Render variables:
 - `DATABASE_PASSWORD`
 - `JWT_SECRET`
 - `ALLOWED_ORIGINS`
-- `AI_PROVIDER`
-- the selected provider key, such as `GEMINI_API_KEY`
+- `AI_PROVIDER` (legacy compatibility default)
+- one or more provider keys, such as `GEMINI_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
 
 Persistent uploads use Supabase Storage through the existing S3-compatible
 storage layer. Set `MEDIA_STORAGE_TYPE=s3` and

@@ -8,13 +8,12 @@ import java.net.http.HttpResponse;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import com.abhiai.abhiai_backend.ai.AiChatMessage;
 import com.abhiai.abhiai_backend.ai.AiChatRequest;
 import com.abhiai.abhiai_backend.ai.AiCompletion;
-import com.abhiai.abhiai_backend.ai.AiProvider;
+import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
 import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
 
@@ -24,8 +23,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
-@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "openai", matchIfMissing = true)
-public class OpenAiResponsesProvider implements AiProvider {
+public class OpenAiResponsesProvider implements ModelProvider {
     @Override public String providerName(){return "openai";}@Override public String modelName(){return properties.getModel();}@Override public boolean configured(){return properties.getApiKey()!=null&&!properties.getApiKey().isBlank();}
     @Override public boolean supportsImageUnderstanding(){return true;}
 
@@ -103,7 +101,7 @@ public class OpenAiResponsesProvider implements AiProvider {
 
     private String buildRequestBody(AiChatRequest request) {
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("model", properties.getModel());
+        payload.put("model", request.providerModelId() == null ? properties.getModel() : request.providerModelId());
         payload.put("instructions", properties.getInstructions());
         payload.put("store", false);
 
