@@ -13,6 +13,8 @@ public interface ConversationAttachmentRepository extends JpaRepository<Conversa
 
     List<ConversationAttachment> findAllByConversationIdOrderByCreatedAtAscIdAsc(UUID conversationId);
 
+    List<ConversationAttachment> findAllByMessageId(UUID messageId);
+
     List<ConversationAttachment> findAllByIdInAndConversationIdAndProcessingStatus(
             Collection<UUID> ids,
             UUID conversationId,

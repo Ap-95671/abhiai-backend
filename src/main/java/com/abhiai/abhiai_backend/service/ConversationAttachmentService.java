@@ -29,7 +29,7 @@ import com.abhiai.abhiai_backend.repository.MediaAssetRepository;
 public class ConversationAttachmentService {
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf");
+            "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain");
 
     private final ConversationRepository conversations;
     private final ConversationAttachmentRepository attachments;
@@ -62,13 +62,13 @@ public class ConversationAttachmentService {
                 .orElseThrow(ConversationNotFoundException::new);
         String contentType = file == null ? null : file.getContentType();
         if (contentType == null || !SUPPORTED_TYPES.contains(contentType.toLowerCase())) {
-            throw new InvalidMediaException("AI chat supports JPEG, PNG, GIF, WebP, and PDF attachments");
+            throw new InvalidMediaException("AI chat supports JPEG, PNG, GIF, WebP, PDF, and UTF-8 text attachments");
         }
 
         var uploaded = mediaService.uploadAttachment(userId, file);
         MediaAsset media = mediaAssets.findByIdAndOwnerIdAndPostIsNull(uploaded.id(), userId)
                 .orElseThrow(() -> new InvalidMediaException("Uploaded attachment is unavailable"));
-        AiAttachmentKind kind = media.getContentType().equals("application/pdf")
+        AiAttachmentKind kind = media.getContentType().equals("application/pdf") || media.getContentType().equals("text/plain")
                 ? AiAttachmentKind.DOCUMENT
                 : AiAttachmentKind.IMAGE;
         ConversationAttachment attachment = attachments.save(
@@ -197,7 +197,10 @@ public class ConversationAttachmentService {
 
     private void processDocument(ConversationAttachment attachment) {
         try (var input = storage.load(attachment.getMediaAsset().getStorageKey()).getInputStream()) {
-            String extractedText = documentExtraction.extractPdf(input.readAllBytes());
+            byte[] content = input.readAllBytes();
+            String extractedText = attachment.getMediaAsset().getContentType().equals("application/pdf")
+                    ? documentExtraction.extractPdf(content)
+                    : documentExtraction.extractText(content);
             attachment.processingCompleted(extractedText, embeddings.embed(extractedText));
         } catch (InvalidMediaException exception) {
             attachment.processingFailed(exception.getMessage());
@@ -209,6 +212,13 @@ public class ConversationAttachmentService {
     private void requireOwnedConversation(UUID userId, UUID conversationId) {
         conversations.findByIdAndUserId(conversationId, userId)
                 .orElseThrow(ConversationNotFoundException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConversationAttachmentResponse> responsesForMessage(UUID messageId) {
+        return attachments.findAllByMessageId(messageId).stream()
+                .map(ConversationAttachmentResponse::from)
+                .toList();
     }
 
     public record PreparedAiInput(String prompt, List<AiInputAttachment> images) {

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.abhiai.abhiai_backend.ai.AiProvider;
 import com.abhiai.abhiai_backend.dto.ai.AiCapabilitiesResponse;
 import com.abhiai.abhiai_backend.ai.tool.AiToolRegistry;
+import com.abhiai.abhiai_backend.service.ImageGenerationService;
 
 @RestController
 @RequestMapping("/api/v1/ai")
@@ -16,10 +17,12 @@ public class AiCapabilitiesController {
 
     private final AiProvider provider;
     private final AiToolRegistry tools;
+    private final ImageGenerationService imageGeneration;
 
-    public AiCapabilitiesController(AiProvider provider, AiToolRegistry tools) {
+    public AiCapabilitiesController(AiProvider provider, AiToolRegistry tools, ImageGenerationService imageGeneration) {
         this.provider = provider;
         this.tools = tools;
+        this.imageGeneration = imageGeneration;
     }
 
     @GetMapping("/capabilities")
@@ -33,7 +36,7 @@ public class AiCapabilitiesController {
                         Map.entry("streaming", true),
                         Map.entry("conversationContext", true),
                         Map.entry("conversationAttachments", true),
-                        Map.entry("imageGeneration", false),
+                        Map.entry("imageGeneration", imageGeneration.configured()),
                         Map.entry("imageUnderstanding", provider.supportsImageUnderstanding()),
                         Map.entry("documentAnalysis", true),
                         Map.entry("scannedDocumentOcr", true),

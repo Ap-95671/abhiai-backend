@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CharacterCodingException;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
@@ -47,6 +48,21 @@ public class DocumentExtractionService {
                     : text;
         } catch (IOException exception) {
             throw new InvalidMediaException("The PDF document could not be processed");
+        }
+    }
+
+    public String extractText(byte[] content) {
+        if (content == null || content.length == 0) {
+            throw new InvalidMediaException("The text document is empty");
+        }
+        try {
+            String text = StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(content)).toString().trim();
+            if (text.isBlank()) throw new InvalidMediaException("The text document contains no readable content");
+            return text.length() > MAX_EXTRACTED_CHARACTERS
+                    ? text.substring(0, MAX_EXTRACTED_CHARACTERS)
+                    : text;
+        } catch (CharacterCodingException exception) {
+            throw new InvalidMediaException("Plain-text documents must use UTF-8 encoding");
         }
     }
 

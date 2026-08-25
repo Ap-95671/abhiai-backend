@@ -2,6 +2,7 @@ package com.abhiai.abhiai_backend.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Locale;
@@ -33,10 +34,10 @@ public class MediaService {
 
     private static final Set<String> IMAGE_TYPES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
     private static final Set<String> VIDEO_TYPES = Set.of("video/mp4", "video/webm");
-    private static final Set<String> DOCUMENT_TYPES = Set.of("application/pdf");
+    private static final Set<String> DOCUMENT_TYPES = Set.of("application/pdf", "text/plain");
     private static final Map<String, String> EXTENSIONS = Map.of(
             "image/jpeg", "jpg", "image/png", "png", "image/gif", "gif", "image/webp", "webp",
-            "video/mp4", "mp4", "video/webm", "webm", "application/pdf", "pdf");
+            "video/mp4", "mp4", "video/webm", "webm", "application/pdf", "pdf", "text/plain", "txt");
 
     private final MediaAssetRepository repository;
     private final UserRepository users;
@@ -66,8 +67,35 @@ public class MediaService {
 
     @Transactional
     public MediaAssetResponse uploadAttachment(UUID userId, MultipartFile file) {
-        requireType(file, Set.copyOf(EXTENSIONS.keySet()), "Only images, MP4/WebM videos, and PDF documents are supported");
+        requireType(file, Set.copyOf(EXTENSIONS.keySet()), "Only images, MP4/WebM videos, PDF, and plain-text documents are supported");
         return store(userId, file);
+    }
+
+    @Transactional
+    public MediaAsset storeGeneratedImage(UUID userId, byte[] content, String contentType) {
+        String normalizedType = Optional.ofNullable(contentType).orElse("").toLowerCase(Locale.ROOT);
+        if (!IMAGE_TYPES.contains(normalizedType) || content == null || content.length == 0) {
+            throw new InvalidMediaException("The image provider returned an unsupported image");
+        }
+        if (content.length > properties.getMaxImageBytes()) {
+            throw new InvalidMediaException("The generated image exceeds the configured media size limit");
+        }
+        User owner = users.findById(userId).orElseThrow(UserNotFoundException::new);
+        UUID id = UUID.randomUUID();
+        String key = id + "." + EXTENSIONS.get(normalizedType);
+        String filename = "abhiai-generated-" + id + "." + EXTENSIONS.get(normalizedType);
+        storage.store(key, new ByteArrayInputStream(content), content.length, normalizedType);
+        try {
+            MediaAsset saved = repository.saveAndFlush(
+                    new MediaAsset(id, owner, key, filename, normalizedType, content.length));
+            if (saved.getProcessingStatus() == com.abhiai.abhiai_backend.entity.MediaProcessingStatus.PENDING) {
+                events.publishEvent(new MediaUploadedEvent(saved.getId()));
+            }
+            return saved;
+        } catch (RuntimeException exception) {
+            storage.delete(key);
+            throw exception;
+        }
     }
 
     private MediaAssetResponse store(UUID userId, MultipartFile file) {
@@ -142,7 +170,7 @@ public class MediaService {
 
     private void verifySignature(MultipartFile file, String type) {
         try (InputStream input = file.getInputStream()) {
-            byte[] header = input.readNBytes(16);
+            byte[] header = input.readNBytes(4096);
             boolean valid = switch (type) {
                 case "image/jpeg" -> header.length >= 3 && (header[0] & 255) == 255 && (header[1] & 255) == 216 && (header[2] & 255) == 255;
                 case "image/png" -> header.length >= 8 && (header[0] & 255) == 137 && header[1] == 80 && header[2] == 78 && header[3] == 71;
@@ -151,6 +179,7 @@ public class MediaService {
                 case "video/mp4" -> containsAt(header, "ftyp", 4);
                 case "video/webm" -> header.length >= 4 && (header[0] & 255) == 0x1A && (header[1] & 255) == 0x45 && (header[2] & 255) == 0xDF && (header[3] & 255) == 0xA3;
                 case "application/pdf" -> startsWith(header, "%PDF-");
+                case "text/plain" -> isLikelyText(header);
                 default -> false;
             };
             if (!valid) throw new InvalidMediaException("File content does not match its declared media type");
@@ -160,6 +189,13 @@ public class MediaService {
     }
 
     private boolean startsWith(byte[] bytes, String value) { return containsAt(bytes, value, 0); }
+    private boolean isLikelyText(byte[] bytes) {
+        for (byte value : bytes) {
+            int unsigned = value & 255;
+            if (unsigned == 0 || (unsigned < 32 && unsigned != '\n' && unsigned != '\r' && unsigned != '\t')) return false;
+        }
+        return true;
+    }
     private boolean containsAt(byte[] bytes, String value, int offset) {
         byte[] expected = value.getBytes(StandardCharsets.US_ASCII);
         if (bytes.length < offset + expected.length) return false;

@@ -13,6 +13,7 @@ import com.abhiai.abhiai_backend.ai.gemini.GeminiProperties;
 import com.abhiai.abhiai_backend.ai.groq.GroqProperties;
 import com.abhiai.abhiai_backend.ai.ollama.OllamaProperties;
 import com.abhiai.abhiai_backend.ai.openai.OpenAiProperties;
+import com.abhiai.abhiai_backend.ai.image.GeminiImageGenerationProperties;
 
 @Configuration
 @EnableConfigurationProperties({
@@ -20,6 +21,7 @@ import com.abhiai.abhiai_backend.ai.openai.OpenAiProperties;
         GeminiProperties.class,
         GroqProperties.class,
         OllamaProperties.class,
+        GeminiImageGenerationProperties.class,
         AiContextProperties.class,
         WebSearchProperties.class
 })

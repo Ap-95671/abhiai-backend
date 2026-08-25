@@ -1,6 +1,7 @@
 package com.abhiai.abhiai_backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.ByteArrayOutputStream;
 
@@ -12,6 +13,14 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 
 class DocumentExtractionServiceTest {
+
+    @Test
+    void extractsUtf8PlainText() {
+        String text = new DocumentExtractionService().extractText(
+                "AbhiAI understands UTF-8 text documents. ✓".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        assertEquals("AbhiAI understands UTF-8 text documents. ✓", text);
+    }
 
     @Test
     void extractsTextFromPdf() throws Exception {

@@ -112,7 +112,7 @@ public class ChatService {
         List<MessageResponse> messages = messageRepository
                 .findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId)
                 .stream()
-                .map(MessageResponse::from)
+                .map(this::messageResponse)
                 .toList();
 
         return ConversationDetailResponse.from(conversation, messages);
@@ -129,8 +129,8 @@ public class ChatService {
         Message assistantMessage = messageRepository.save(new Message(conversation, MessageRole.ASSISTANT, completion.content()));
         conversation.touch();
         return new ChatExchangeResponse(
-                MessageResponse.from(userMessage),
-                MessageResponse.from(assistantMessage),
+                messageResponse(userMessage),
+                messageResponse(assistantMessage),
                 ConversationSummaryResponse.from(conversation));
     }
 
@@ -157,8 +157,8 @@ public class ChatService {
         conversation.touch();
 
         return new ChatExchangeResponse(
-                MessageResponse.from(userMessage),
-                MessageResponse.from(assistantMessage),
+                messageResponse(userMessage),
+                messageResponse(assistantMessage),
                 ConversationSummaryResponse.from(conversation));
     }
 
@@ -203,6 +203,12 @@ public class ChatService {
         }
 
         return title.trim();
+    }
+
+    private MessageResponse messageResponse(Message message) {
+        return attachmentService == null
+                ? MessageResponse.from(message)
+                : MessageResponse.from(message, attachmentService.responsesForMessage(message.getId()));
     }
 
     private void assignGeneratedTitleIfNeeded(Conversation conversation, List<Message> history, String content) {
