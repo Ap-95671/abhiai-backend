@@ -51,13 +51,13 @@ services:
       - key: MEDIA_STORAGE_TYPE
         value: s3
       - key: MEDIA_S3_PROVIDER
-        value: R2
+        value: S3_COMPATIBLE
       - key: MEDIA_S3_BUCKET
         sync: false
       - key: MEDIA_S3_ENDPOINT
         sync: false
       - key: MEDIA_S3_REGION
-        value: auto
+        sync: false
       - key: MEDIA_S3_PATH_STYLE
         value: true
       - key: MEDIA_S3_CHUNKED_ENCODING
