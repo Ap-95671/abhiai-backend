@@ -1,7 +1,9 @@
 package com.abhiai.abhiai_backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -25,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.abhiai.abhiai_backend.ai.AiChatRequest;
 import com.abhiai.abhiai_backend.ai.AiCompletion;
 import com.abhiai.abhiai_backend.ai.AiProvider;
+import com.abhiai.abhiai_backend.ai.orchestration.SelectionMode;
 import com.abhiai.abhiai_backend.dto.chat.ChatExchangeResponse;
 import com.abhiai.abhiai_backend.dto.chat.ConversationDetailResponse;
 import com.abhiai.abhiai_backend.dto.chat.ConversationSummaryResponse;
@@ -109,6 +112,44 @@ class ChatServiceTest {
         verify(aiProvider).generate(requestCaptor.capture());
         assertEquals(1, requestCaptor.getValue().messages().size());
         assertEquals("  Preserve this formatting  ", requestCaptor.getValue().messages().get(0).content());
+    }
+
+    @Test
+    void manualModelSelectionIsStrictByDefault() {
+        Conversation conversation = new Conversation(
+                new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash"),
+                "Chat");
+        conversation.selectModel(SelectionMode.MANUAL, "openai:gpt-test");
+        when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));
+        when(messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(CONVERSATION_ID)).thenReturn(List.of());
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiProvider.generate(any(AiChatRequest.class))).thenReturn(new AiCompletion("AI reply"));
+
+        chatService.addUserMessage(USER_ID, CONVERSATION_ID, new SendMessageRequest("Hello"));
+
+        ArgumentCaptor<AiChatRequest> requestCaptor = ArgumentCaptor.forClass(AiChatRequest.class);
+        verify(aiProvider).generate(requestCaptor.capture());
+        assertEquals("MANUAL", requestCaptor.getValue().selectionMode());
+        assertEquals("openai:gpt-test", requestCaptor.getValue().selectedModelId());
+        assertFalse(requestCaptor.getValue().fallbackAllowed());
+    }
+
+    @Test
+    void automaticModelSelectionAllowsFallbackByDefault() {
+        Conversation conversation = new Conversation(
+                new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash"),
+                "Chat");
+        when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));
+        when(messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(CONVERSATION_ID)).thenReturn(List.of());
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiProvider.generate(any(AiChatRequest.class))).thenReturn(new AiCompletion("AI reply"));
+
+        chatService.addUserMessage(USER_ID, CONVERSATION_ID, new SendMessageRequest("Hello"));
+
+        ArgumentCaptor<AiChatRequest> requestCaptor = ArgumentCaptor.forClass(AiChatRequest.class);
+        verify(aiProvider).generate(requestCaptor.capture());
+        assertEquals("AUTO", requestCaptor.getValue().selectionMode());
+        assertTrue(requestCaptor.getValue().fallbackAllowed());
     }
 
     @Test

@@ -58,6 +58,19 @@ class OrchestratingAiProviderTest {
         verify(openai, never()).generateStream(any(), any());
     }
 
+    @Test void manualSelectionDoesNotSilentlySwitchProviders() {
+        when(openai.generate(any())).thenThrow(new AiProviderException("selected provider failed"));
+
+        AiChatRequest manualRequest = new AiChatRequest(
+                List.of(new AiChatMessage(MessageRole.USER, "hello")),
+                List.of(), "MANUAL", "openai:gpt-test", false, null);
+
+        assertThatThrownBy(() -> orchestrator.generate(manualRequest))
+                .isInstanceOf(AiProviderException.class)
+                .hasMessage("selected provider failed");
+        verify(gemini, never()).generate(any());
+    }
+
     private ModelProvider provider(String name) {
         ModelProvider provider = mock(ModelProvider.class);
         when(provider.providerName()).thenReturn(name);

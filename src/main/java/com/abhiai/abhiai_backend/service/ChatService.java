@@ -221,7 +221,9 @@ public class ChatService {
                                         List<com.abhiai.abhiai_backend.ai.AiInputAttachment> attachments,
                                         Conversation conversation,
                                         SendMessageRequest request) {
-        boolean fallback = request.fallbackAllowed() == null || request.fallbackAllowed();
+        boolean fallback = request.fallbackAllowed() != null
+                ? request.fallbackAllowed()
+                : conversation.getModelSelectionMode() == SelectionMode.AUTO;
         return new AiChatRequest(messages, attachments, conversation.getModelSelectionMode().name(),
                 conversation.getPreferredModelId(), fallback, null);
     }
