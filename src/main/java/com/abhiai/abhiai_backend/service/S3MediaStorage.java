@@ -7,6 +7,7 @@ import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -44,6 +45,7 @@ public class S3MediaStorage implements MediaStorage {
     private final S3Client client;
     private final String bucket;
 
+    @Autowired
     public S3MediaStorage(S3MediaProperties properties) {
         properties.validate();
         S3Configuration serviceConfiguration = S3Configuration.builder()

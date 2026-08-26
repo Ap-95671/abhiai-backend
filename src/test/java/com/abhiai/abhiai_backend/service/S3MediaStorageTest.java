@@ -14,6 +14,7 @@ import java.io.InputStream;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.abhiai.abhiai_backend.exception.InvalidMediaException;
 import com.abhiai.abhiai_backend.exception.MediaStorageUnavailableException;
@@ -25,6 +26,13 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
 class S3MediaStorageTest {
+
+    @Test
+    void identifiesTheConfigurationConstructorForSpringInjection() throws NoSuchMethodException {
+        assertThat(S3MediaStorage.class.getConstructor(
+                com.abhiai.abhiai_backend.config.S3MediaProperties.class).isAnnotationPresent(Autowired.class))
+                .isTrue();
+    }
 
     @Test
     void buffersUploadSoTheSdkCanRetryWithARepeatableBody() throws IOException {
