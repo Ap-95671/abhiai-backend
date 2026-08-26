@@ -1,8 +1,12 @@
 package com.abhiai.abhiai_backend.service;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -11,6 +15,7 @@ import org.springframework.util.StringUtils;
 
 import com.abhiai.abhiai_backend.config.S3MediaProperties;
 import com.abhiai.abhiai_backend.exception.InvalidMediaException;
+import com.abhiai.abhiai_backend.exception.MediaStorageUnavailableException;
 
 import jakarta.annotation.PreDestroy;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -18,6 +23,7 @@ import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -32,6 +38,8 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 @Component
 @ConditionalOnProperty(prefix = "app.media", name = "storage-type", havingValue = "s3")
 public class S3MediaStorage implements MediaStorage {
+
+    private static final Logger log = LoggerFactory.getLogger(S3MediaStorage.class);
 
     private final S3Client client;
     private final String bucket;
@@ -68,14 +76,33 @@ public class S3MediaStorage implements MediaStorage {
         this.bucket = properties.getBucket();
     }
 
+    S3MediaStorage(S3Client client, String bucket) {
+        this.client = Objects.requireNonNull(client);
+        this.bucket = Objects.requireNonNull(bucket);
+    }
+
     @Override
     public void store(String key, InputStream content, long size, String contentType) {
+        byte[] bytes;
+        try {
+            bytes = content.readAllBytes();
+        } catch (IOException exception) {
+            throw new InvalidMediaException("File could not be read");
+        }
+        if (bytes.length != size) {
+            throw new InvalidMediaException("Uploaded file size did not match its content");
+        }
+
         try {
             client.putObject(
                     PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
-                    RequestBody.fromInputStream(content, size));
+                    RequestBody.fromBytes(bytes));
         } catch (S3Exception exception) {
-            throw new InvalidMediaException("Cloud media storage is unavailable");
+            logServiceFailure("put", key, exception);
+            throw new MediaStorageUnavailableException();
+        } catch (SdkClientException exception) {
+            logClientFailure("put", key, exception);
+            throw new MediaStorageUnavailableException();
         }
     }
 
@@ -92,7 +119,11 @@ public class S3MediaStorage implements MediaStorage {
         } catch (NoSuchKeyException exception) {
             throw new InvalidMediaException("Stored media is unavailable");
         } catch (S3Exception exception) {
-            throw new InvalidMediaException("Cloud media storage is unavailable");
+            logServiceFailure("get", key, exception);
+            throw new MediaStorageUnavailableException();
+        } catch (SdkClientException exception) {
+            logClientFailure("get", key, exception);
+            throw new MediaStorageUnavailableException();
         }
     }
 
@@ -100,9 +131,25 @@ public class S3MediaStorage implements MediaStorage {
     public void delete(String key) {
         try {
             client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
-        } catch (S3Exception ignored) {
+        } catch (S3Exception exception) {
+            logServiceFailure("delete", key, exception);
+        } catch (SdkClientException exception) {
+            logClientFailure("delete", key, exception);
             // Deletion is idempotent and must not break cleanup of the owning database row.
         }
+    }
+
+    private void logServiceFailure(String operation, String key, S3Exception exception) {
+        String errorCode = exception.awsErrorDetails() == null
+                ? "unknown"
+                : exception.awsErrorDetails().errorCode();
+        log.warn("media_storage_failure operation={} key={} status={} code={} requestId={}",
+                operation, key, exception.statusCode(), errorCode, exception.requestId());
+    }
+
+    private void logClientFailure(String operation, String key, SdkClientException exception) {
+        log.warn("media_storage_failure operation={} key={} clientError={}",
+                operation, key, exception.getClass().getSimpleName());
     }
 
     @PreDestroy

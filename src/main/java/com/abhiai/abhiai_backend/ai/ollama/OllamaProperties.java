@@ -7,11 +7,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.ai.ollama")
 public class OllamaProperties {
 
+    private boolean enabled = true;
     private String baseUrl = "http://host.docker.internal:11434";
     private String model = "gemma3:4b";
     private String instructions = "You are AbhiAI, a helpful, accurate, and concise AI assistant.";
     private Duration requestTimeout = Duration.ofSeconds(120);
 
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     public String getModel() { return model; }

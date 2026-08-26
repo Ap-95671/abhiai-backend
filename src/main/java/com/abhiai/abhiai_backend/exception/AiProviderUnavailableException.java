@@ -3,6 +3,10 @@ package com.abhiai.abhiai_backend.exception;
 public class AiProviderUnavailableException extends AiProviderException {
 
     public AiProviderUnavailableException() {
-        super("The AI provider is not configured");
+        this("The AI provider is not configured");
+    }
+
+    public AiProviderUnavailableException(String message) {
+        super(message, AiProviderFailureKind.CONFIGURATION);
     }
 }

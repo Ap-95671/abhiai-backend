@@ -12,6 +12,7 @@ import com.abhiai.abhiai_backend.ai.AiCompletion;
 import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.config.MultiProviderProperties;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
+import com.abhiai.abhiai_backend.exception.AiProviderFailureKind;
 import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
 
 import tools.jackson.databind.JsonNode;
@@ -50,7 +51,7 @@ public class OpenAiCompatibleModelProvider implements ModelProvider {
         try {
             HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300)
-                throw new AiProviderException(failureMessage(response.statusCode()));
+                throw providerFailure(response.statusCode());
             JsonNode root = mapper.readTree(response.body());
             String content = root.path("choices").path(0).path("message").path("content").asString();
             if (content.isBlank()) throw new AiProviderException(providerName + " returned no assistant message");
@@ -84,10 +85,20 @@ public class OpenAiCompatibleModelProvider implements ModelProvider {
         return (base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + "/chat/completions";
     }
 
-    private String failureMessage(int status) {
-        if (status == 401 || status == 403) return providerName + " rejected its API credentials.";
-        if (status == 429) return providerName + " rate limit or quota was reached.";
-        return providerName + " could not complete the request (HTTP " + status + ").";
+    AiProviderException providerFailure(int status) {
+        if (status == 401)
+            return new AiProviderException(providerName + " rejected its API credentials.", AiProviderFailureKind.AUTHENTICATION);
+        if (status == 402)
+            return new AiProviderException(providerName + " requires available API balance or billing.", AiProviderFailureKind.BILLING);
+        if (status == 403)
+            return new AiProviderException(providerName + " account does not permit access to the selected model.", AiProviderFailureKind.AUTHORIZATION);
+        if (status == 404)
+            return new AiProviderException(providerName + " could not find the selected model.", AiProviderFailureKind.MODEL_UNAVAILABLE);
+        if (status == 429)
+            return new AiProviderException(providerName + " rate limit or quota was reached.", AiProviderFailureKind.RATE_LIMIT);
+        if (status >= 500)
+            return new AiProviderException(providerName + " is temporarily unavailable.", AiProviderFailureKind.UPSTREAM_UNAVAILABLE);
+        return new AiProviderException(providerName + " could not complete the request (HTTP " + status + ").");
     }
 
     private boolean notBlank(String value) { return value != null && !value.isBlank(); }

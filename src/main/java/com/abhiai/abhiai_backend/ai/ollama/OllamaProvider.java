@@ -15,6 +15,7 @@ import com.abhiai.abhiai_backend.ai.AiChatRequest;
 import com.abhiai.abhiai_backend.ai.AiCompletion;
 import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
+import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -23,7 +24,13 @@ import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class OllamaProvider implements ModelProvider {
-    @Override public String providerName(){return "ollama";}@Override public String modelName(){return properties.getModel();}
+    @Override public String providerName() { return "ollama"; }
+    @Override public String modelName() { return properties.getModel(); }
+    @Override public boolean configured() {
+        return properties.isEnabled()
+                && properties.getBaseUrl() != null && !properties.getBaseUrl().isBlank()
+                && properties.getModel() != null && !properties.getModel().isBlank();
+    }
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -40,6 +47,9 @@ public class OllamaProvider implements ModelProvider {
 
     @Override
     public AiCompletion generate(AiChatRequest request) {
+        if (!configured()) {
+            throw new AiProviderUnavailableException("Ollama is disabled in this environment.");
+        }
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(chatUrl()))
                 .timeout(properties.getRequestTimeout())

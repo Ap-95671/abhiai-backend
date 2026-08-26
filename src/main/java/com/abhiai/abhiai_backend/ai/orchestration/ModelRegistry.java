@@ -16,10 +16,10 @@ public class ModelRegistry {
     public ModelRegistry(
             @Value("${app.ai.openai.model:gpt-4.1-mini}") String openAi,
             @Value("${app.ai.gemini.model:gemini-3.5-flash}") String gemini,
-            @Value("${app.ai.groq.model:llama-3.1-8b-instant}") String groq,
+            @Value("${app.ai.groq.model:openai/gpt-oss-20b}") String groq,
             @Value("${app.ai.ollama.model:gemma3:4b}") String ollama,
             @Value("${app.ai.anthropic.model:claude-sonnet-4-20250514}") String anthropic,
-            @Value("${app.ai.xai.model:grok-4-fast}") String xai,
+            @Value("${app.ai.xai.model:grok-4.6}") String xai,
             @Value("${app.ai.deepseek.model:deepseek-v4-flash}") String deepseek,
             @Value("${app.ai.mistral.model:mistral-small-latest}") String mistral,
             @Value("${app.ai.cohere.model:command-a-plus-05-2026}") String cohere,

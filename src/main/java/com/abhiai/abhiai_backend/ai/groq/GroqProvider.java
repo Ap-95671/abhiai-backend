@@ -15,6 +15,7 @@ import com.abhiai.abhiai_backend.ai.AiChatRequest;
 import com.abhiai.abhiai_backend.ai.AiCompletion;
 import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
+import com.abhiai.abhiai_backend.exception.AiProviderFailureKind;
 import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
 
 import tools.jackson.databind.JsonNode;
@@ -24,7 +25,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class GroqProvider implements ModelProvider {
-    @Override public String providerName(){return "groq";}@Override public String modelName(){return properties.getModel();}@Override public boolean configured(){return properties.getApiKey()!=null&&!properties.getApiKey().isBlank();}
+    @Override public String providerName() { return "groq"; }
+    @Override public String modelName() { return properties.getModel(); }
+    @Override public boolean configured() { return properties.getApiKey() != null && !properties.getApiKey().isBlank(); }
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -56,7 +59,7 @@ public class GroqProvider implements ModelProvider {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AiProviderException("Groq could not complete the request");
+                throw providerFailure(response.statusCode(), response.body());
             }
             return new AiCompletion(extractAssistantText(objectMapper.readTree(response.body())));
         } catch (InterruptedException exception) {
@@ -73,6 +76,32 @@ public class GroqProvider implements ModelProvider {
             throw new AiProviderException("Groq returned no assistant message");
         }
         return content;
+    }
+
+    static AiProviderException providerFailure(int status, String responseBody) {
+        String body = responseBody == null ? "" : responseBody.toLowerCase(Locale.ROOT);
+        if (status == 401) {
+            return new AiProviderException("Groq rejected its API credentials.", AiProviderFailureKind.AUTHENTICATION);
+        }
+        if (status == 402) {
+            return new AiProviderException("Groq requires available API balance or billing.", AiProviderFailureKind.BILLING);
+        }
+        if (status == 403) {
+            return new AiProviderException("Groq account does not permit access to the selected model.", AiProviderFailureKind.AUTHORIZATION);
+        }
+        if (status == 429 || status == 498) {
+            return new AiProviderException("Groq rate limit or capacity limit was reached.", AiProviderFailureKind.RATE_LIMIT);
+        }
+        if (status == 404 || body.contains("model_decommissioned")
+                || body.contains("decommissioned") || body.contains("retired model")) {
+            return new AiProviderException(
+                    "Groq no longer offers the configured model. Update GROQ_MODEL to a supported model.",
+                    AiProviderFailureKind.MODEL_UNAVAILABLE);
+        }
+        if (status >= 500) {
+            return new AiProviderException("Groq is temporarily unavailable.", AiProviderFailureKind.UPSTREAM_UNAVAILABLE);
+        }
+        return new AiProviderException("Groq rejected the request (HTTP " + status + ").");
     }
 
     private String buildRequestBody(AiChatRequest request) {

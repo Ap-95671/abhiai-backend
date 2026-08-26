@@ -203,6 +203,13 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(MediaStorageUnavailableException.class)
+    public ResponseEntity<ApiError> handleMediaStorageUnavailable(
+            MediaStorageUnavailableException exception,
+            WebRequest request) {
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request, Map.of());
+    }
+
     @ExceptionHandler(MediaNotFoundException.class)
     public ResponseEntity<ApiError> handleMediaNotFound(MediaNotFoundException exception, WebRequest request) {
         return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request, Map.of());

@@ -9,7 +9,7 @@ public class GroqProperties {
 
     private String apiKey;
     private String baseUrl = "https://api.groq.com/openai/v1";
-    private String model = "llama-3.1-8b-instant";
+    private String model = "openai/gpt-oss-20b";
     private String instructions = "You are AbhiAI, a helpful, accurate, and concise AI assistant.";
     private Duration requestTimeout = Duration.ofSeconds(60);
 
