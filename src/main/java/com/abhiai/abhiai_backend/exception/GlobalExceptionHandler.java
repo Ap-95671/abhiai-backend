@@ -11,8 +11,27 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 
+import com.abhiai.abhiai_backend.news.exception.InvalidNewsQueryException;
+import com.abhiai.abhiai_backend.news.exception.NewsArticleNotFoundException;
+import com.abhiai.abhiai_backend.news.exception.NewsProviderException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(InvalidNewsQueryException.class)
+    public ResponseEntity<ApiError> handleInvalidNewsQuery(InvalidNewsQueryException exception, WebRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(NewsArticleNotFoundException.class)
+    public ResponseEntity<ApiError> handleNewsArticleNotFound(NewsArticleNotFoundException exception, WebRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(NewsProviderException.class)
+    public ResponseEntity<ApiError> handleNewsProvider(NewsProviderException exception, WebRequest request) {
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request, Map.of());
+    }
 
     @ExceptionHandler(InvalidContentReportException.class)
     public ResponseEntity<ApiError> handleInvalidContentReport(InvalidContentReportException exception, WebRequest request) {

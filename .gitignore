@@ -6,6 +6,13 @@ target/
 !.env.example
 application-local.properties
 application-secrets.properties
+*.pem
+*.key
+*.p12
+*.jks
+credentials*.json
+secrets/
+.secrets/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
