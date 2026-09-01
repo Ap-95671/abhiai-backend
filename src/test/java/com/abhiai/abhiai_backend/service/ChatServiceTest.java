@@ -20,6 +20,8 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -201,6 +203,35 @@ class ChatServiceTest {
         assertEquals(2, response.messages().size());
         assertEquals("Hello", response.messages().get(0).content());
         assertEquals("Hi there", response.messages().get(1).content());
+    }
+
+    @Test
+    void searchConversationsNormalizesQueryAndLimitsPageSize() {
+        Conversation conversation = new Conversation(
+                new User("abhishek", "Abhishek", "user@example.com", "bcrypt-hash"),
+                "Project research");
+        when(conversationRepository.searchOwnedConversations(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(conversation), PageRequest.of(0, 50), 1));
+
+        var response = chatService.searchConversations(
+                USER_ID, "  Project  ", PageRequest.of(0, 500));
+
+        assertEquals(1, response.content().size());
+        assertEquals("Project research", response.content().get(0).title());
+        ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
+                ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(conversationRepository).searchOwnedConversations(
+                org.mockito.ArgumentMatchers.eq(USER_ID),
+                org.mockito.ArgumentMatchers.eq("Project"),
+                pageable.capture());
+        assertEquals(50, pageable.getValue().getPageSize());
+    }
+
+    @Test
+    void searchConversationsRejectsInvalidQuery() {
+        assertThrows(com.abhiai.abhiai_backend.exception.InvalidSearchQueryException.class,
+                () -> chatService.searchConversations(USER_ID, "x", PageRequest.of(0, 20)));
+        verifyNoInteractions(conversationRepository);
     }
 
     @Test

@@ -2,10 +2,14 @@ package com.abhiai.abhiai_backend.entity;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -16,6 +20,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
 @Entity
@@ -52,6 +57,11 @@ public class Message {
     @Column(name = "fallback_used")
     private Boolean fallbackUsed;
 
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "message_citations", joinColumns = @JoinColumn(name = "message_id"))
+    @OrderColumn(name = "position")
+    private List<MessageCitation> citations = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -72,6 +82,11 @@ public class Message {
         this.outputTokens = completion.outputTokens();
         this.latencyMs = completion.latencyMs();
         this.fallbackUsed = completion.fallbackUsed();
+    }
+
+    public void replaceCitations(List<MessageCitation> values) {
+        citations.clear();
+        citations.addAll(values);
     }
     
 
@@ -96,4 +111,5 @@ public class Message {
     public Integer getOutputTokens() { return outputTokens; }
     public Long getLatencyMs() { return latencyMs; }
     public Boolean getFallbackUsed() { return fallbackUsed; }
+    public List<MessageCitation> getCitations() { return List.copyOf(citations); }
 }

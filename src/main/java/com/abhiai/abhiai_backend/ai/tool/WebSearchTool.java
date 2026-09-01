@@ -7,6 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,10 @@ public class WebSearchTool implements AiTool {
 
     @Override
     public String execute(String input) {
+        return search(input).context();
+    }
+
+    public WebSearchResult search(String input) {
         if (!configured()) {
             throw new AiProviderException("Web search is not configured on this server");
         }
@@ -62,23 +68,46 @@ public class WebSearchTool implements AiTool {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new AiProviderException("Web search could not complete the request");
             }
-            StringBuilder context = new StringBuilder("[Consented web search results]\n");
-            int index = 1;
+            List<WebSearchSource> sources = new ArrayList<>();
             for (var result : objectMapper.readTree(response.body()).path("web").path("results")) {
-                context.append(index++).append(". ")
-                        .append(result.path("title").asString()).append("\n")
-                        .append(result.path("url").asString()).append("\n")
-                        .append(result.path("description").asString()).append("\n\n");
+                String resultUrl = validHttpUrl(result.path("url").asString());
+                String title = result.path("title").asString().trim();
+                if (resultUrl == null || title.isBlank()) continue;
+                URI uri = URI.create(resultUrl);
+                sources.add(new WebSearchSource(
+                        title,
+                        resultUrl,
+                        result.path("description").asString().trim(),
+                        uri.getHost() == null ? "Source" : uri.getHost().replaceFirst("^www\\.", "")));
             }
-            if (index == 1) {
-                return "[Consented web search returned no results]";
+            if (sources.isEmpty()) {
+                return new WebSearchResult("[Consented web search returned no results]", List.of());
             }
-            return context.toString();
+            StringBuilder context = new StringBuilder("[Consented web search results]\n");
+            for (int sourceIndex = 0; sourceIndex < sources.size(); sourceIndex++) {
+                WebSearchSource source = sources.get(sourceIndex);
+                context.append(sourceIndex + 1).append(". ")
+                        .append(source.title()).append("\n")
+                        .append(source.url()).append("\n")
+                        .append(source.description()).append("\n\n");
+            }
+            return new WebSearchResult(context.toString(), sources);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AiProviderException("Web search was interrupted", exception);
         } catch (IOException exception) {
             throw new AiProviderException("Web search failed", exception);
+        }
+    }
+
+    private String validHttpUrl(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            URI uri = URI.create(value.trim());
+            return ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+                    && uri.getHost() != null ? uri.toString() : null;
+        } catch (IllegalArgumentException exception) {
+            return null;
         }
     }
 }

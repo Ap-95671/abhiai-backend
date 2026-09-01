@@ -83,6 +83,9 @@ public class User {
     @Enumerated(EnumType.STRING) @Column(name="account_privacy",nullable=false,length=16)
     private AccountPrivacy accountPrivacy = AccountPrivacy.PUBLIC;
 
+    @Column(name = "ai_memory_enabled", nullable = false)
+    private boolean aiMemoryEnabled;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -176,6 +179,8 @@ public class User {
     }
     public AccountPrivacy getAccountPrivacy(){return accountPrivacy;}
     public void changeAccountPrivacy(AccountPrivacy privacy){this.accountPrivacy=java.util.Objects.requireNonNull(privacy);}
+    public boolean isAiMemoryEnabled() { return aiMemoryEnabled; }
+    public void changeAiMemoryEnabled(boolean enabled) { this.aiMemoryEnabled = enabled; }
     public void changeVerifiedStatus(VerifiedStatus status){this.verifiedStatus=java.util.Objects.requireNonNull(status);}
 
     public void updateProfile(

@@ -18,6 +18,11 @@ import com.abhiai.abhiai_backend.news.exception.NewsProviderException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(InvalidMemoryException.class)
+    public ResponseEntity<ApiError> handleInvalidMemory(InvalidMemoryException exception, WebRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
+    }
+
     @ExceptionHandler(InvalidNewsQueryException.class)
     public ResponseEntity<ApiError> handleInvalidNewsQuery(InvalidNewsQueryException exception, WebRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());

@@ -18,7 +18,8 @@ public record MessageResponse(
         Integer inputTokens,
         Integer outputTokens,
         Long latencyMs,
-        boolean fallbackUsed) {
+        boolean fallbackUsed,
+        List<MessageCitationResponse> citations) {
 
     public static MessageResponse from(Message message) {
         return new MessageResponse(
@@ -27,7 +28,8 @@ public record MessageResponse(
                 message.getContent(),
                 message.getCreatedAt(),
                 List.of(), message.getAiProvider(), message.getAiModel(), message.getInputTokens(),
-                message.getOutputTokens(), message.getLatencyMs(), Boolean.TRUE.equals(message.getFallbackUsed()));
+                message.getOutputTokens(), message.getLatencyMs(), Boolean.TRUE.equals(message.getFallbackUsed()),
+                message.getCitations().stream().map(MessageCitationResponse::from).toList());
     }
 
     public static MessageResponse from(Message message, List<ConversationAttachmentResponse> attachments) {
@@ -37,6 +39,7 @@ public record MessageResponse(
                 message.getContent(),
                 message.getCreatedAt(),
                 List.copyOf(attachments), message.getAiProvider(), message.getAiModel(), message.getInputTokens(),
-                message.getOutputTokens(), message.getLatencyMs(), Boolean.TRUE.equals(message.getFallbackUsed()));
+                message.getOutputTokens(), message.getLatencyMs(), Boolean.TRUE.equals(message.getFallbackUsed()),
+                message.getCitations().stream().map(MessageCitationResponse::from).toList());
     }
 }

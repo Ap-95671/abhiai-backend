@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -31,6 +33,7 @@ import com.abhiai.abhiai_backend.dto.chat.CreateConversationRequest;
 import com.abhiai.abhiai_backend.dto.chat.RenameConversationRequest;
 import com.abhiai.abhiai_backend.dto.chat.SendMessageRequest;
 import com.abhiai.abhiai_backend.dto.chat.UpdateModelPreferenceRequest;
+import com.abhiai.abhiai_backend.dto.common.PageResponse;
 import com.abhiai.abhiai_backend.exception.AiProviderException;
 import com.abhiai.abhiai_backend.security.JwtPrincipal;
 import com.abhiai.abhiai_backend.service.ChatService;
@@ -63,6 +66,14 @@ public class ChatController {
     public ResponseEntity<List<ConversationSummaryResponse>> getConversations(
             @AuthenticationPrincipal JwtPrincipal principal) {
         return ResponseEntity.ok(chatService.getConversations(principal.userId()));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<PageResponse<ConversationSummaryResponse>> searchConversations(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @RequestParam(name = "q") String query,
+            Pageable pageable) {
+        return ResponseEntity.ok(chatService.searchConversations(principal.userId(), query, pageable));
     }
 
     @GetMapping("/{conversationId}")
