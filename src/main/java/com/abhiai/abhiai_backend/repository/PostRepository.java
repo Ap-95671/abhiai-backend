@@ -27,7 +27,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
               and not exists (select block.id from UserBlock block where
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
-              and (post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
@@ -44,7 +44,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
               and not exists (select block.id from UserBlock block where
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
-              and (post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
@@ -77,7 +77,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
               and exists (select media.id from MediaAsset media where media.post.id = post.id)
-              and (post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
@@ -95,7 +95,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
               and exists (select media.id from MediaAsset media where media.post.id = post.id)
-              and (post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
