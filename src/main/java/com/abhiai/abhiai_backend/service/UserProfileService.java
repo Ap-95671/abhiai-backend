@@ -2,6 +2,7 @@ package com.abhiai.abhiai_backend.service;
 
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,7 @@ import com.abhiai.abhiai_backend.entity.User;
 import com.abhiai.abhiai_backend.exception.UserNotFoundException;
 import com.abhiai.abhiai_backend.exception.UsernameAlreadyTakenException;
 import com.abhiai.abhiai_backend.repository.UserRepository;
+import com.abhiai.abhiai_backend.repository.PostRepository;
 import com.abhiai.abhiai_backend.repository.MediaAssetRepository;
 import com.abhiai.abhiai_backend.entity.MediaAsset;
 import com.abhiai.abhiai_backend.exception.InvalidMediaException;
@@ -24,18 +26,21 @@ public class UserProfileService {
     private final UsernamePolicy usernamePolicy;
     private final MediaAssetRepository mediaAssetRepository;
     private final BlockPolicyService blockPolicyService;
+    private final PostRepository postRepository;
 
     public UserProfileService(UserRepository userRepository, UsernamePolicy usernamePolicy, MediaAssetRepository mediaAssetRepository) {
-        this(userRepository, usernamePolicy, mediaAssetRepository, null);
+        this(userRepository, usernamePolicy, mediaAssetRepository, null, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public UserProfileService(UserRepository userRepository, UsernamePolicy usernamePolicy,
-            MediaAssetRepository mediaAssetRepository, BlockPolicyService blockPolicyService) {
+            MediaAssetRepository mediaAssetRepository, BlockPolicyService blockPolicyService,
+            PostRepository postRepository) {
         this.userRepository = userRepository;
         this.usernamePolicy = usernamePolicy;
         this.mediaAssetRepository = mediaAssetRepository;
         this.blockPolicyService = blockPolicyService;
+        this.postRepository = postRepository;
     }
 
     @Transactional(readOnly = true)
@@ -52,7 +57,11 @@ public class UserProfileService {
         if (blockPolicyService != null && blockPolicyService.isBlockedEitherDirection(viewerId, target.getId())) {
             throw new UserNotFoundException();
         }
-        return UserProfileResponse.from(target);
+        long visiblePostCount = postRepository == null
+                ? target.getPostCount()
+                : postRepository.findVisibleProfilePosts(viewerId, target.getId(), PageRequest.of(0, 1))
+                        .getTotalElements();
+        return UserProfileResponse.from(target, visiblePostCount);
     }
 
     @Transactional(readOnly = true)

@@ -27,6 +27,12 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
               and not exists (select block.id from UserBlock block where
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
+              and (
+                post.author.id = :viewerId
+                or post.author.accountPrivacy = com.abhiai.abhiai_backend.entity.AccountPrivacy.PUBLIC
+                or exists (select privacyFollow.id from Follow privacyFollow
+                  where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
+              )
               and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
@@ -44,6 +50,12 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
               and not exists (select block.id from UserBlock block where
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
+              and (
+                post.author.id = :viewerId
+                or post.author.accountPrivacy = com.abhiai.abhiai_backend.entity.AccountPrivacy.PUBLIC
+                or exists (select privacyFollow.id from Follow privacyFollow
+                  where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
+              )
               and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
@@ -76,6 +88,12 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
               and not exists (select block.id from UserBlock block where
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
+              and (
+                post.author.id = :viewerId
+                or post.author.accountPrivacy = com.abhiai.abhiai_backend.entity.AccountPrivacy.PUBLIC
+                or exists (select privacyFollow.id from Follow privacyFollow
+                  where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
+              )
               and exists (select media.id from MediaAsset media where media.post.id = post.id)
               and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
@@ -94,6 +112,12 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
               and not exists (select block.id from UserBlock block where
                 (block.blocker.id = :viewerId and block.blocked.id = post.author.id)
                 or (block.blocker.id = post.author.id and block.blocked.id = :viewerId))
+              and (
+                post.author.id = :viewerId
+                or post.author.accountPrivacy = com.abhiai.abhiai_backend.entity.AccountPrivacy.PUBLIC
+                or exists (select privacyFollow.id from Follow privacyFollow
+                  where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
+              )
               and exists (select media.id from MediaAsset media where media.post.id = post.id)
               and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
@@ -351,7 +375,19 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                     from posts post
                     join users author on author.id = post.author_id
                     where post.deleted_at is null
-                      and post.search_vector @@ websearch_to_tsquery('simple', :query)
+                      and (
+                        post.search_vector @@ websearch_to_tsquery('simple', :query)
+                        or to_tsvector('simple', coalesce(author.display_name, '') || ' ' || author.username)
+                          @@ websearch_to_tsquery('simple', :query)
+                        or exists (
+                          select 1
+                          from post_hashtags relation
+                          join hashtags hashtag on hashtag.id = relation.hashtag_id
+                          where relation.post_id = post.id
+                            and to_tsvector('simple', hashtag.normalized_tag || ' ' || hashtag.display_tag)
+                              @@ websearch_to_tsquery('simple', :query)
+                        )
+                      )
                       and (:authorUsername is null or author.username = :authorUsername)
                       and (cast(:fromDate as timestamp with time zone) is null
                            or post.created_at >= cast(:fromDate as timestamp with time zone))
@@ -379,6 +415,15 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                           )
                         )
                       )
+                      and (
+                        post.author_id = :userId
+                        or author.account_privacy = 'PUBLIC'
+                        or exists (
+                          select 1 from user_follows privacy_follow
+                          where privacy_follow.follower_id = :userId
+                            and privacy_follow.following_id = post.author_id
+                        )
+                      )
                     order by
                              case when :sortMode = 'RELEVANCE'
                                   then ts_rank(post.search_vector, websearch_to_tsquery('simple', :query)) end desc,
@@ -392,7 +437,19 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                     from posts post
                     join users author on author.id = post.author_id
                     where post.deleted_at is null
-                      and post.search_vector @@ websearch_to_tsquery('simple', :query)
+                      and (
+                        post.search_vector @@ websearch_to_tsquery('simple', :query)
+                        or to_tsvector('simple', coalesce(author.display_name, '') || ' ' || author.username)
+                          @@ websearch_to_tsquery('simple', :query)
+                        or exists (
+                          select 1
+                          from post_hashtags relation
+                          join hashtags hashtag on hashtag.id = relation.hashtag_id
+                          where relation.post_id = post.id
+                            and to_tsvector('simple', hashtag.normalized_tag || ' ' || hashtag.display_tag)
+                              @@ websearch_to_tsquery('simple', :query)
+                        )
+                      )
                       and (:authorUsername is null or author.username = :authorUsername)
                       and (cast(:fromDate as timestamp with time zone) is null
                            or post.created_at >= cast(:fromDate as timestamp with time zone))
@@ -418,6 +475,15 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                             where follow_relation.follower_id = :userId
                               and follow_relation.following_id = post.author_id
                           )
+                        )
+                      )
+                      and (
+                        post.author_id = :userId
+                        or author.account_privacy = 'PUBLIC'
+                        or exists (
+                          select 1 from user_follows privacy_follow
+                          where privacy_follow.follower_id = :userId
+                            and privacy_follow.following_id = post.author_id
                         )
                       )
                     """,

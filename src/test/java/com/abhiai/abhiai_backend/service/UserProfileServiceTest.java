@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -13,6 +14,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,6 +27,7 @@ import com.abhiai.abhiai_backend.exception.UserNotFoundException;
 import com.abhiai.abhiai_backend.exception.UsernameAlreadyTakenException;
 import com.abhiai.abhiai_backend.repository.UserRepository;
 import com.abhiai.abhiai_backend.repository.MediaAssetRepository;
+import com.abhiai.abhiai_backend.repository.PostRepository;
 
 @ExtendWith(MockitoExtension.class)
 class UserProfileServiceTest {
@@ -37,12 +41,16 @@ class UserProfileServiceTest {
     private UsernamePolicy usernamePolicy;
     @Mock
     private MediaAssetRepository mediaAssetRepository;
+    @Mock
+    private BlockPolicyService blockPolicyService;
+    @Mock
+    private PostRepository postRepository;
 
     private UserProfileService userProfileService;
 
     @BeforeEach
     void setUp() {
-        userProfileService = new UserProfileService(userRepository, usernamePolicy, mediaAssetRepository);
+        userProfileService = new UserProfileService(userRepository, usernamePolicy, mediaAssetRepository, blockPolicyService, postRepository);
     }
 
     @Test
@@ -55,6 +63,20 @@ class UserProfileServiceTest {
 
         assertEquals("abhishek", response.username());
         assertEquals("Abhishek", response.displayName());
+    }
+
+    @Test
+    void reportsThePostCountVisibleToTheCurrentViewer() {
+        User user = user();
+        UUID viewerId = UUID.randomUUID();
+        when(usernamePolicy.normalizeAndValidate("abhishek")).thenReturn("abhishek");
+        when(userRepository.findByUsernameIgnoreCase("abhishek")).thenReturn(Optional.of(user));
+        when(postRepository.findVisibleProfilePosts(eq(viewerId), eq(user.getId()), eq(PageRequest.of(0, 1))))
+                .thenReturn(new PageImpl<>(java.util.List.of(), PageRequest.of(0, 1), 2));
+
+        UserProfileResponse response = userProfileService.getByUsername(viewerId, "abhishek");
+
+        assertEquals(2, response.postCount());
     }
 
     @Test

@@ -30,6 +30,10 @@ public record UserProfileResponse(
         AccountPrivacy accountPrivacy) {
 
     public static UserProfileResponse from(User user) {
+        return from(user, user.getPostCount());
+    }
+
+    public static UserProfileResponse from(User user, long visiblePostCount) {
         return new UserProfileResponse(
                 user.getId(),
                 user.getUsername(),
@@ -47,7 +51,7 @@ public record UserProfileResponse(
                 user.getVerifiedStatus(),
                 user.getFollowerCount(),
                 user.getFollowingCount(),
-                user.getPostCount(),
+                visiblePostCount,
                 user.isShowLikesOnProfile(),user.getAccountPrivacy());
     }
 }
