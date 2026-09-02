@@ -20,6 +20,11 @@ import com.abhiai.abhiai_backend.entity.PostVisibility;
 public interface PostRepository extends JpaRepository<Post, UUID> {
 
     @EntityGraph(attributePaths = {"author", "media", "community"})
+    Page<Post> findByAuthorIdAndDeletedAtIsNullOrderByPinnedAtDescCreatedAtDescIdDesc(
+            UUID authorId,
+            Pageable pageable);
+
+    @EntityGraph(attributePaths = {"author", "media", "community"})
     @Query(value = """
             select post from Post post
             where post.author.id = :profileUserId

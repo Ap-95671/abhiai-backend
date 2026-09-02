@@ -63,6 +63,23 @@ class ProfileContentServiceTest {
     }
 
     @Test
+    void ownerLoadsOwnPostsWithoutApplyingFollowerVisibilityQuery() {
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(postRepository.findByAuthorIdAndDeletedAtIsNullOrderByPinnedAtDescCreatedAtDescIdDesc(
+                PROFILE_ID, pageable)).thenReturn(Page.empty(pageable));
+
+        var response = service.getPosts(PROFILE_ID, "Builder", pageable);
+
+        assertEquals(0, response.totalElements());
+        verify(postRepository).findByAuthorIdAndDeletedAtIsNullOrderByPinnedAtDescCreatedAtDescIdDesc(
+                PROFILE_ID, pageable);
+        verify(postRepository, never()).findVisibleProfilePosts(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void loadsPrivacyFilteredRepliesAndMedia() {
         PageRequest pageable = PageRequest.of(0, 20);
         when(replyRepository.findVisibleProfileReplies(VIEWER_ID, PROFILE_ID, pageable))

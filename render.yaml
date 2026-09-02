@@ -62,6 +62,18 @@ services:
         value: en
       - key: GEMINI_IMAGE_MODEL
         value: gemini-3.1-flash-image
+      - key: IMAGE_GENERATION_PROVIDER
+        value: cloudflare
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_IMAGE_MODEL
+        value: "@cf/black-forest-labs/flux-1-schnell"
+      - key: CLOUDFLARE_IMAGE_STEPS
+        value: 4
+      - key: GEMINI_IMAGE_FALLBACK_ENABLED
+        value: false
       - key: MEDIA_STORAGE_TYPE
         value: s3
       - key: MEDIA_S3_PROVIDER

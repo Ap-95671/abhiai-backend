@@ -14,6 +14,8 @@ import com.abhiai.abhiai_backend.ai.groq.GroqProperties;
 import com.abhiai.abhiai_backend.ai.ollama.OllamaProperties;
 import com.abhiai.abhiai_backend.ai.openai.OpenAiProperties;
 import com.abhiai.abhiai_backend.ai.image.GeminiImageGenerationProperties;
+import com.abhiai.abhiai_backend.ai.image.CloudflareImageGenerationProperties;
+import com.abhiai.abhiai_backend.ai.image.ImageGenerationRoutingProperties;
 import com.abhiai.abhiai_backend.ai.ModelProvider;
 import com.abhiai.abhiai_backend.ai.provider.AnthropicModelProvider;
 import com.abhiai.abhiai_backend.ai.provider.OpenAiCompatibleModelProvider;
@@ -26,6 +28,8 @@ import tools.jackson.databind.ObjectMapper;
         GroqProperties.class,
         OllamaProperties.class,
         GeminiImageGenerationProperties.class,
+        CloudflareImageGenerationProperties.class,
+        ImageGenerationRoutingProperties.class,
         AiContextProperties.class,
         WebSearchProperties.class,
         MultiProviderProperties.class

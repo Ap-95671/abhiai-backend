@@ -157,6 +157,14 @@ Provider credentials are server-side environment variables. Configure only the p
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Ollama | no cloud key; configure `OLLAMA_BASE_URL` |
 
+Image generation uses the same server-side boundary. Configure
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` to use Cloudflare Workers AI
+with `@cf/black-forest-labs/flux-1-schnell` as the default image model. The
+Workers AI call is made directly by the backend; no Cloudflare credential is
+sent to the browser. Gemini image generation remains available, while fallback
+from Cloudflare to Gemini is disabled unless `GEMINI_IMAGE_FALLBACK_ENABLED=true`
+is intentionally configured.
+
 An empty or missing key keeps that provider unavailable. The model catalog must not advertise an unconfigured provider as ready.
 
 ## Media storage

@@ -55,8 +55,15 @@ public class ProfileContentService {
     public PageResponse<PostResponse> getPosts(UUID viewerId, String username, Pageable pageable) {
         User profileUser = findProfileUser(username);
         requireVisible(viewerId, profileUser.getId());
+        Pageable normalized = normalize(pageable);
+        if (profileUser.getId().equals(viewerId)) {
+            return PageResponse.from(
+                    postRepository.findByAuthorIdAndDeletedAtIsNullOrderByPinnedAtDescCreatedAtDescIdDesc(
+                            profileUser.getId(), normalized),
+                    PostResponse::from);
+        }
         return PageResponse.from(
-                postRepository.findVisibleProfilePosts(viewerId, profileUser.getId(), normalize(pageable)),
+                postRepository.findVisibleProfilePosts(viewerId, profileUser.getId(), normalized),
                 PostResponse::from);
     }
 
