@@ -44,6 +44,12 @@ public class Message {
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
+    @Column(name = "client_item_id", length = 128)
+    private String clientItemId;
+
+    public String getClientItemId() { return clientItemId; }
+    public void setClientItemId(String value) { clientItemId = value; }
+
     @Column(name = "ai_provider", length = 64)
     private String aiProvider;
     @Column(name = "ai_model", length = 160)

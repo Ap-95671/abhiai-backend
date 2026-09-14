@@ -56,6 +56,16 @@ public class ChatService {
     private final ConversationAttachmentService attachmentService;
     private final AiToolRegistry toolRegistry;
     private final AiMemoryService memoryService;
+    private com.abhiai.abhiai_backend.assistant.AssistantPolicy assistantPolicy;
+    @org.springframework.beans.factory.annotation.Value("${app.ai.gemini.model:gemini-3.5-flash}")
+    private String assistantTextModel = "gemini-3.5-flash";
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setAssistantPolicy(com.abhiai.abhiai_backend.assistant.AssistantPolicy policy) { assistantPolicy = policy; }
+
+    private void guardAssistant(UUID userId, Conversation conversation) {
+        if (conversation.isCharacterAssistant() && assistantPolicy != null) assistantPolicy.request(userId);
+    }
 
     public ChatService(
             ConversationRepository conversationRepository,
@@ -173,6 +183,7 @@ public class ChatService {
     @Transactional
     public ChatExchangeResponse addUserMessage(UUID userId, UUID conversationId, SendMessageRequest request) {
         Conversation conversation = findConversationOwnedByUser(userId, conversationId);
+        guardAssistant(userId, conversation);
         List<Message> history = messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId);
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
@@ -198,6 +209,7 @@ public class ChatService {
     private ChatExchangeResponse addUserMessageInternal(
             UUID userId, UUID conversationId, SendMessageRequest request, Consumer<String> onTextChunk) {
         Conversation conversation = findConversationOwnedByUser(userId, conversationId);
+        guardAssistant(userId, conversation);
         List<Message> history = messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId);
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
@@ -271,6 +283,15 @@ public class ChatService {
                                         List<com.abhiai.abhiai_backend.ai.AiInputAttachment> attachments,
                                         Conversation conversation,
                                         SendMessageRequest request) {
+        if (conversation.isCharacterAssistant()) {
+            var withPersonality = new java.util.ArrayList<AiChatMessage>();
+            withPersonality.add(new AiChatMessage(MessageRole.SYSTEM,
+                    com.abhiai.abhiai_backend.assistant.AssistantPersonality.INSTRUCTIONS));
+            withPersonality.addAll(messages);
+            // Character assistant is Gemini-only, even when a caller asks for AUTO/fallback.
+            return new AiChatRequest(withPersonality, attachments, "MANUAL",
+                    "gemini:" + assistantTextModel, false, null);
+        }
         boolean fallback = request.fallbackAllowed() != null
                 ? request.fallbackAllowed()
                 : conversation.getModelSelectionMode() == SelectionMode.AUTO;

@@ -16,6 +16,10 @@ import com.abhiai.abhiai_backend.entity.User;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> lockAssistantOwner(@Param("id") UUID id);
+
     @Query("""
             select user
             from User user

@@ -18,6 +18,12 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
 
     Optional<Conversation> findByIdAndUserId(UUID id, UUID userId);
 
+    Optional<Conversation> findFirstByUserIdAndCharacterAssistantTrueOrderByUpdatedAtDesc(UUID userId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Conversation c where c.id = :id and c.user.id = :userId and c.characterAssistant = true")
+    Optional<Conversation> lockAssistant(@Param("id") UUID id, @Param("userId") UUID userId);
+
     @Query(
             value = """
                     select distinct c from Conversation c

@@ -49,6 +49,12 @@ private List<Message> messages = new ArrayList<>();
     @Column(nullable = false, length = 255)
     private String title;
 
+    @Column(name = "character_assistant", nullable = false)
+    private boolean characterAssistant;
+
+    public boolean isCharacterAssistant() { return characterAssistant; }
+    public void markCharacterAssistant() { characterAssistant = true; }
+
     @Enumerated(EnumType.STRING)
     @Column(name = "model_selection_mode", nullable = false, length = 16)
     private SelectionMode modelSelectionMode = SelectionMode.AUTO;

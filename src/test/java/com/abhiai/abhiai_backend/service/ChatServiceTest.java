@@ -243,4 +243,38 @@ class ChatServiceTest {
 
         verifyNoInteractions(messageRepository, aiProvider);
     }
+    @Test
+    void assistantTextIncludesPersistedVoiceHistoryAndOnePersonality() {
+        Conversation conversation = new Conversation(new User("tester", "Tester", "test@example.com", "hash"), "Assistant");
+        conversation.markCharacterAssistant();
+        when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));
+        when(messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(CONVERSATION_ID)).thenReturn(List.of(
+                new Message(conversation, MessageRole.USER, "Explain arrays"),
+                new Message(conversation, MessageRole.ASSISTANT, "Arrays store elements")));
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiProvider.generate(any(AiChatRequest.class))).thenReturn(new AiCompletion("Linked lists use nodes"));
+        chatService.addUserMessage(USER_ID, CONVERSATION_ID, new SendMessageRequest("How are linked lists different?"));
+        ArgumentCaptor<AiChatRequest> capture = ArgumentCaptor.forClass(AiChatRequest.class);
+        verify(aiProvider).generate(capture.capture());
+        assertEquals(MessageRole.SYSTEM, capture.getValue().messages().get(0).role());
+        assertEquals(com.abhiai.abhiai_backend.assistant.AssistantPersonality.INSTRUCTIONS, capture.getValue().messages().get(0).content());
+        assertEquals("MANUAL", capture.getValue().selectionMode());
+        assertEquals("gemini:gemini-3.5-flash", capture.getValue().selectedModelId());
+        assertFalse(capture.getValue().fallbackAllowed());
+        assertEquals("Explain arrays", capture.getValue().messages().get(1).content());
+        assertEquals("How are linked lists different?", capture.getValue().messages().getLast().content());
+    }
+
+    @Test
+    void assistantFeatureFlagAlsoGuardsTheExistingChatEndpoint() {
+        Conversation conversation = new Conversation(new User("tester", "Tester", "test@example.com", "hash"), "Assistant");
+        conversation.markCharacterAssistant();
+        when(conversationRepository.findByIdAndUserId(CONVERSATION_ID, USER_ID)).thenReturn(Optional.of(conversation));
+        var settings = new com.abhiai.abhiai_backend.assistant.AssistantProperties(); settings.setEnabled(false);
+        chatService.setAssistantPolicy(new com.abhiai.abhiai_backend.assistant.AssistantPolicy(settings));
+        assertThrows(com.abhiai.abhiai_backend.assistant.AssistantException.class,
+                () -> chatService.addUserMessage(USER_ID, CONVERSATION_ID, new SendMessageRequest("Hello")));
+        verifyNoInteractions(aiProvider, messageRepository);
+    }
+
 }
