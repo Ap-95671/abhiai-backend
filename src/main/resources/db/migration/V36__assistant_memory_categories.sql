@@ -1,0 +1,3 @@
+ALTER TABLE user_memories ADD COLUMN category varchar(32) NOT NULL DEFAULT 'PREFERENCE';
+ALTER TABLE user_memories ADD COLUMN memory_source varchar(32) NOT NULL DEFAULT 'USER_APPROVED';
+ALTER TABLE user_memories ADD CONSTRAINT chk_memory_category CHECK (category IN ('PREFERENCE','INTEREST','ASSISTANT_SETTING','PROJECT_CONTEXT'));

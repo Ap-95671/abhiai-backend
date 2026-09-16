@@ -224,6 +224,18 @@ public class ConversationAttachmentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Map<String,Object> assistantContext(UUID userId, UUID conversationId, UUID attachmentId) {
+        requireOwnedConversation(userId, conversationId);
+        var item = attachments.findById(attachmentId)
+                .filter(a -> a.getConversation().getId().equals(conversationId))
+                .filter(a -> a.getKind() == AiAttachmentKind.DOCUMENT && a.getProcessingStatus() == AiAttachmentStatus.READY)
+                .orElseThrow(() -> new InvalidMediaException("Document context is unavailable"));
+        return java.util.Map.of("title", item.getMediaAsset().getOriginalFilename(),
+                "text", com.abhiai.abhiai_backend.assistant.AssistantContextService.limited(item.getExtractedText(), 6000),
+                "coverage", "First 6000 extracted characters; current PDF page is not known.");
+    }
+
     public record PreparedAiInput(String prompt, List<AiInputAttachment> images) {
     }
 }

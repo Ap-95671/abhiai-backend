@@ -33,21 +33,21 @@ public class AiMemoryController {
 
     @GetMapping
     public ResponseEntity<MemorySettingsResponse> settings(@AuthenticationPrincipal JwtPrincipal principal) {
-        return ResponseEntity.ok(service.settings(principal.userId()));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(service.settings(principal.userId()));
     }
 
     @PatchMapping
     public ResponseEntity<MemorySettingsResponse> update(
             @AuthenticationPrincipal JwtPrincipal principal,
             @Valid @RequestBody UpdateMemorySettingsRequest request) {
-        return ResponseEntity.ok(service.updateEnabled(principal.userId(), request.enabled()));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(service.updateEnabled(principal.userId(), request.enabled()));
     }
 
     @PostMapping("/items")
     public ResponseEntity<UserMemoryResponse> create(
             @AuthenticationPrincipal JwtPrincipal principal,
             @Valid @RequestBody CreateMemoryRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(principal.userId(), request.content()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(principal.userId(), request.content(), request.category()));
     }
 
     @DeleteMapping("/items/{memoryId}")

@@ -23,8 +23,13 @@ public record SendMessageRequest(
         @Size(max = 160, message = "Model ID must not exceed 160 characters")
         String selectedModelId,
 
-        Boolean fallbackAllowed) {
+        Boolean fallbackAllowed,
+        @jakarta.validation.Valid com.abhiai.abhiai_backend.assistant.AssistantPageContext assistantContext) {
 
+    public SendMessageRequest(String content, List<UUID> attachmentIds, boolean externalProcessingAllowed,
+            boolean webSearchAllowed, String selectionMode, String selectedModelId, Boolean fallbackAllowed) {
+        this(content, attachmentIds, externalProcessingAllowed, webSearchAllowed, selectionMode, selectedModelId, fallbackAllowed, null);
+    }
     public SendMessageRequest(String content) {
         this(content, List.of(), false, false, null, null, null);
     }

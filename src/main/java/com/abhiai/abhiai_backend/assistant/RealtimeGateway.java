@@ -28,6 +28,7 @@ public class RealtimeGateway {
         if (!available()) throw unavailable();
         Map<String, Object> setup = Map.of(
                 "model", "models/" + settings.getModel(),
+                "tools", List.of(Map.of("functionDeclarations", AssistantToolRegistry.declarations())),
                 "generationConfig", Map.of("responseModalities", List.of("AUDIO"), "maxOutputTokens", 2048,
                         "speechConfig", Map.of("voiceConfig", Map.of("prebuiltVoiceConfig", Map.of("voiceName", settings.getVoice())))),
                 "systemInstruction", Map.of("parts", List.of(Map.of("text", AssistantPersonality.INSTRUCTIONS))),

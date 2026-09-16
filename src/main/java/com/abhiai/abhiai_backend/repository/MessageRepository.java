@@ -10,4 +10,5 @@ import com.abhiai.abhiai_backend.entity.Message;
 public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     List<Message> findAllByConversationIdOrderByCreatedAtAscIdAsc(UUID conversationId);
+    List<Message> findByConversationIdOrderByCreatedAtDescIdDesc(UUID conversationId, org.springframework.data.domain.Pageable pageable);
 }

@@ -57,6 +57,8 @@ public class ChatService {
     private final AiToolRegistry toolRegistry;
     private final AiMemoryService memoryService;
     private com.abhiai.abhiai_backend.assistant.AssistantPolicy assistantPolicy;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.abhiai.abhiai_backend.assistant.AssistantIntelligence assistantIntelligence;
     @org.springframework.beans.factory.annotation.Value("${app.ai.gemini.model:gemini-3.5-flash}")
     private String assistantTextModel = "gemini-3.5-flash";
 
@@ -187,7 +189,7 @@ public class ChatService {
         List<Message> history = messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId);
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
-        PreparedAiRequest prepared = prepareAiRequest(userId, conversation, history, userMessage, request);
+        PreparedAiRequest prepared = prepareAiRequest(userId, conversation, history, userMessage, request, ignored -> {});
         AiCompletion completion = aiProvider.generate(prepared.request());
         Message assistantMessage = new Message(conversation, MessageRole.ASSISTANT, completion.content());
         assistantMessage.applyAiMetadata(completion);
@@ -203,18 +205,24 @@ public class ChatService {
     @Transactional
     public ChatExchangeResponse addUserMessageStreaming(
             UUID userId, UUID conversationId, SendMessageRequest request, Consumer<String> onTextChunk) {
-        return addUserMessageInternal(userId, conversationId, request, onTextChunk);
+        return addUserMessageInternal(userId, conversationId, request, onTextChunk, ignored -> {});
+    }
+
+    @Transactional
+    public ChatExchangeResponse addUserMessageStreaming(UUID userId, UUID conversationId, SendMessageRequest request,
+            Consumer<String> onTextChunk, Consumer<Object> onAssistantEvent) {
+        return addUserMessageInternal(userId, conversationId, request, onTextChunk, onAssistantEvent);
     }
 
     private ChatExchangeResponse addUserMessageInternal(
-            UUID userId, UUID conversationId, SendMessageRequest request, Consumer<String> onTextChunk) {
+            UUID userId, UUID conversationId, SendMessageRequest request, Consumer<String> onTextChunk, Consumer<Object> onAssistantEvent) {
         Conversation conversation = findConversationOwnedByUser(userId, conversationId);
         guardAssistant(userId, conversation);
         List<Message> history = messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId);
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
 
-        PreparedAiRequest prepared = prepareAiRequest(userId, conversation, history, userMessage, request);
+        PreparedAiRequest prepared = prepareAiRequest(userId, conversation, history, userMessage, request, onAssistantEvent);
         AiCompletion completion = aiProvider.generateStream(
                 prepared.request(),
                 onTextChunk);
@@ -243,7 +251,12 @@ public class ChatService {
             Conversation conversation,
             List<Message> history,
             Message userMessage,
-            SendMessageRequest request) {
+            SendMessageRequest request, Consumer<Object> onAssistantEvent) {
+        if (conversation.isCharacterAssistant() && assistantIntelligence != null) {
+            var bounded = contextBuilder.build(history, new AiChatMessage(MessageRole.USER, request.content()));
+            return new PreparedAiRequest(routedRequest(assistantIntelligence.prepare(userId,bounded,request.content(),
+                request.assistantContext(),onAssistantEvent),List.of(),conversation,request),List.of());
+        }
         if (attachmentService == null) {
             applyRequestedPreference(conversation, request);
             String rememberedPrompt = memoryService == null

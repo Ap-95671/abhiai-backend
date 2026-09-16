@@ -32,6 +32,17 @@ public class UserMemory {
     @Column(nullable = false, length = 500)
     private String content;
 
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private MemoryCategory category = MemoryCategory.PREFERENCE;
+
+    @Column(name = "memory_source", nullable = false, length = 32)
+    private String source = "USER_APPROVED";
+
+    public MemoryCategory getCategory() { return category; }
+    public String getSource() { return source; }
+    public void categorize(MemoryCategory category) { this.category = category == null ? MemoryCategory.PREFERENCE : category; }
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

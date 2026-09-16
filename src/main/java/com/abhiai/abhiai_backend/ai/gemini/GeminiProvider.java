@@ -42,17 +42,23 @@ public class GeminiProvider implements ModelProvider {
     }
 
     @Override
-    public AiCompletion generate(AiChatRequest request) {
+    public AiCompletion generate(AiChatRequest request) { return generate(request, null); }
+
+    public String generateStructured(AiChatRequest request, java.util.Map<String,Object> schema) {
+        return generate(request, schema).content();
+    }
+
+    private AiCompletion generate(AiChatRequest request, java.util.Map<String,Object> schema) {
         if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new AiProviderUnavailableException();
         }
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(generateContentUrl(request)))
-                .timeout(properties.getRequestTimeout())
+                .timeout(schema == null ? properties.getRequestTimeout() : java.time.Duration.ofSeconds(20))
                 .header("x-goog-api-key", properties.getApiKey())
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(request)))
+                .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(request, schema)))
                 .build();
 
         try {
@@ -93,8 +99,12 @@ public class GeminiProvider implements ModelProvider {
                 }
             }
             try (java.util.stream.Stream<String> lines = response.body()) {
-                lines.filter(line -> line.startsWith("data: ")).forEach(line -> {
-                    String chunk = extractAssistantTextOrEmpty(objectMapper.readTree(line.substring(6)));
+                lines.filter(line -> line.startsWith("data:")).forEach(line -> {
+                    var frame = objectMapper.readTree(line.substring(5).trim());
+                    String reason = frame.path("candidates").path(0).path("finishReason").asString("");
+                    if (!reason.isBlank() && !reason.equals("STOP"))
+                        org.slf4j.LoggerFactory.getLogger(getClass()).warn("gemini_stream_finish reason={}", reason.replaceAll("[^A-Z_]", ""));
+                    String chunk = extractAssistantTextOrEmpty(frame);
                     if (chunk.isEmpty()) {
                         return;
                     }
@@ -125,7 +135,7 @@ public class GeminiProvider implements ModelProvider {
     private static String extractAssistantTextOrEmpty(JsonNode response) {
         StringBuilder content = new StringBuilder();
         for (JsonNode part : response.path("candidates").path(0).path("content").path("parts")) {
-            content.append(part.path("text").asString());
+            if (!part.path("thought").asBoolean(false)) content.append(part.path("text").asString());
         }
         return content.toString();
     }
@@ -135,20 +145,28 @@ public class GeminiProvider implements ModelProvider {
     }
 
     private String providerFailureMessage(int statusCode, String body) {
-        String message = objectMapper.readTree(body).path("error").path("message").asString();
-        if (!message.isBlank()) {
-            return "Gemini could not complete the request: " + message;
-        }
+        // Provider bodies can include request details. Keep them out of logs and user-visible errors.
         return "Gemini could not complete the request (HTTP " + statusCode + ")";
     }
 
-    private String buildRequestBody(AiChatRequest request) {
+    String buildRequestBody(AiChatRequest request) { return buildRequestBody(request, null); }
+    private String buildRequestBody(AiChatRequest request, java.util.Map<String,Object> schema) {
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.putObject("systemInstruction").putArray("parts").addObject()
-                .put("text", properties.getInstructions());
+        ArrayNode systemParts = payload.putObject("systemInstruction").putArray("parts");
+        systemParts.addObject().put("text", properties.getInstructions());
+        if (schema != null) {
+            var config = payload.putObject("generationConfig");
+            config.put("responseMimeType", "application/json");
+            config.set("responseJsonSchema", objectMapper.valueToTree(schema));
+            config.put("maxOutputTokens", 2300);
+        }
         ArrayNode contents = payload.putArray("contents");
         for (int index = 0; index < request.messages().size(); index++) {
             AiChatMessage message = request.messages().get(index);
+            if (message.role() == MessageRole.SYSTEM) {
+                systemParts.addObject().put("text", message.content());
+                continue;
+            }
             ArrayNode parts = contents.addObject()
                     .put("role", message.role() == MessageRole.ASSISTANT ? "model" : "user")
                     .putArray("parts");

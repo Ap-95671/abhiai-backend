@@ -5,8 +5,8 @@ import java.util.UUID;
 
 import com.abhiai.abhiai_backend.entity.UserMemory;
 
-public record UserMemoryResponse(UUID id, String content, Instant createdAt, Instant updatedAt) {
+public record UserMemoryResponse(UUID id, String content, Instant createdAt, Instant updatedAt, com.abhiai.abhiai_backend.entity.MemoryCategory category, String source) {
     public static UserMemoryResponse from(UserMemory memory) {
-        return new UserMemoryResponse(memory.getId(), memory.getContent(), memory.getCreatedAt(), memory.getUpdatedAt());
+        return new UserMemoryResponse(memory.getId(), memory.getContent(), memory.getCreatedAt(), memory.getUpdatedAt(), memory.getCategory(), memory.getSource());
     }
 }

@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.mockito.Mockito.*;
 
-@WebMvcTest(AssistantController.class)
+@WebMvcTest({AssistantController.class, AssistantToolsController.class})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 class AssistantSecurityTest {
     @Autowired MockMvc mvc;
@@ -23,6 +23,7 @@ class AssistantSecurityTest {
     @MockitoBean AssistantConversationService conversations;
     @MockitoBean RealtimeSessionService sessions;
     @MockitoBean RealtimeGateway gateway;
+    @MockitoBean AssistantToolRegistry tools;
     @Test void anonymousRequestsCannotCreateSessionsOrReadHistory() throws Exception {
         mvc.perform(post("/api/v1/assistant/sessions").contentType("application/json").content("{}"))
             .andExpect(status().isUnauthorized());
@@ -49,6 +50,26 @@ class AssistantSecurityTest {
                 .andExpect(jsonPath("$.apiKey").doesNotExist()).andExpect(jsonPath("$.client_secret").doesNotExist());
         verify(conversations).history(user, conversationId);
         verify(sessions).create(user, id);
+    }
+
+    @Test void toolsRequireAuthenticationAndOwnedAssistantConversation() throws Exception {
+        mvc.perform(post("/api/v1/assistant/tools").contentType("application/json").content("{}"))
+            .andExpect(status().isUnauthorized());
+        var user=java.util.UUID.randomUUID();var conversation=java.util.UUID.randomUUID();
+        when(jwtService.parseAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user,"test@example.com"));
+        when(conversations.history(user,conversation)).thenThrow(new com.abhiai.abhiai_backend.exception.ConversationNotFoundException());
+        mvc.perform(post("/api/v1/assistant/tools").header("Authorization","Bearer valid").contentType("application/json")
+            .content("{\"conversationId\":\""+conversation+"\",\"name\":\"SEARCH_ABHIAI\",\"arguments\":{\"query\":\"Java\"}}"))
+            .andExpect(status().isNotFound());
+        verifyNoInteractions(tools);
+    }
+    @Test void malformedToolContextIsRejectedBeforeExecution() throws Exception {
+        var user=java.util.UUID.randomUUID();
+        when(jwtService.parseAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user,"test@example.com"));
+        mvc.perform(post("/api/v1/assistant/tools").header("Authorization","Bearer valid").contentType("application/json")
+            .content("{\"conversationId\":\""+java.util.UUID.randomUUID()+"\",\"name\":\"SEARCH_ABHIAI\",\"arguments\":{\"query\":\"Java\"},\"context\":{\"pageType\":\"password\",\"externalProcessingAllowed\":false}}"))
+            .andExpect(status().isBadRequest());
+        verifyNoInteractions(tools);
     }
 
 }

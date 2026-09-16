@@ -140,7 +140,8 @@ public class ChatController {
                         principal.userId(),
                         conversationId,
                         request,
-                        chunk -> sendEvent(emitter, "chunk", chunk));
+                        chunk -> sendEvent(emitter, "chunk", chunk),
+                        event -> sendEvent(emitter, "assistant", event));
                 sendEvent(emitter, "complete", exchange);
                 streamFinished.set(true);
                 emitter.complete();
