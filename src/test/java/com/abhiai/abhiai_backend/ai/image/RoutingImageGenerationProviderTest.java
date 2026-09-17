@@ -1,52 +1,52 @@
 package com.abhiai.abhiai_backend.ai.image;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.Test;
 
 import com.abhiai.abhiai_backend.exception.AiProviderException;
+import com.abhiai.abhiai_backend.exception.AiProviderUnavailableException;
 
 class RoutingImageGenerationProviderTest {
 
     private final CloudflareImageGenerationProvider cloudflare = mock(CloudflareImageGenerationProvider.class);
-    private final GeminiImageGenerationProvider gemini = mock(GeminiImageGenerationProvider.class);
-    private final ImageGenerationRoutingProperties properties = new ImageGenerationRoutingProperties();
+    private final RoutingImageGenerationProvider router = new RoutingImageGenerationProvider(cloudflare);
 
     @Test
-    void usesCloudflareByDefault() {
+    void usesExistingCloudflareProviderAndPreservesImageResponse() {
         GeneratedImage expected = new GeneratedImage(new byte[] {1}, "image/jpeg", "flux");
+        when(cloudflare.generate("Create an image of a dog")).thenReturn(expected);
+        when(cloudflare.providerName()).thenReturn("cloudflare");
+        when(cloudflare.modelName()).thenReturn("flux");
         when(cloudflare.configured()).thenReturn(true);
-        when(cloudflare.generate("prompt")).thenReturn(expected);
 
-        GeneratedImage result = router().generate("prompt");
-
-        assertEquals("flux", result.model());
+        assertSame(expected, router.generate("Create an image of a dog"));
+        assertEquals("cloudflare", router.providerName());
+        assertEquals("flux", router.modelName());
+        assertTrue(router.configured());
+        verify(cloudflare).generate("Create an image of a dog");
     }
 
     @Test
-    void fallsBackFromExplicitGeminiToConfiguredCloudflare() {
-        properties.setProvider("gemini");
-        when(gemini.configured()).thenReturn(true);
-        when(cloudflare.configured()).thenReturn(true);
-        when(gemini.generate("prompt")).thenThrow(new AiProviderException("quota"));
-        when(cloudflare.generate("prompt")).thenReturn(new GeneratedImage(new byte[] {1}, "image/jpeg", "flux"));
+    void missingCloudflareCredentialsNeverSelectAnotherProvider() {
+        when(cloudflare.configured()).thenReturn(false);
+        when(cloudflare.generate("prompt")).thenThrow(new AiProviderUnavailableException("missing credentials"));
 
-        assertEquals("flux", router().generate("prompt").model());
+        assertFalse(router.configured());
+        assertEquals("Image generation failed. Please try again.",
+                assertThrows(AiProviderException.class, () -> router.generate("prompt")).getMessage());
+        verify(cloudflare, times(1)).generate("prompt");
     }
 
     @Test
-    void doesNotSilentlyFallBackToGeminiFromCloudflare() {
-        when(cloudflare.configured()).thenReturn(true);
-        when(gemini.configured()).thenReturn(true);
-        when(cloudflare.generate("prompt")).thenThrow(new AiProviderException("free quota"));
+    void cloudflareFailureIsNeutralAndDoesNotRetryOrFallBack() {
+        when(cloudflare.generate("prompt")).thenThrow(new AiProviderException("private provider diagnostic"));
 
-        assertThrows(AiProviderException.class, () -> router().generate("prompt"));
-    }
-
-    private RoutingImageGenerationProvider router() {
-        return new RoutingImageGenerationProvider(cloudflare, gemini, properties);
+        var failure = assertThrows(AiProviderException.class, () -> router.generate("prompt"));
+        assertEquals("Image generation failed. Please try again.", failure.getMessage());
+        assertNull(failure.getCause());
+        verify(cloudflare, times(1)).generate("prompt");
+        verifyNoMoreInteractions(cloudflare);
     }
 }
