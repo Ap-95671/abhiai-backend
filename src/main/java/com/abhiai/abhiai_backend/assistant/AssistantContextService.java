@@ -62,7 +62,7 @@ public class AssistantContextService {
             }
             case "document" -> {
                 if(!context.externalProcessingAllowed()) throw new IllegalArgumentException("Document processing not approved");
-                data.putAll(attachments.assistantContext(userId,UUID.fromString(context.parentId()),UUID.fromString(context.entityId())));
+                data.putAll(attachments.assistantContext(userId,UUID.fromString(context.parentId()),UUID.fromString(context.entityId()),context.currentPage(),context.currentSection()==null?context.selectedText():context.currentSection()));
             }
             default -> { }
         }

@@ -20,5 +20,8 @@ public interface ConversationAttachmentRepository extends JpaRepository<Conversa
             UUID conversationId,
             AiAttachmentStatus processingStatus);
 
+    @org.springframework.data.jpa.repository.Query("select a from ConversationAttachment a where a.conversation.user.id=:userId and a.kind=com.abhiai.abhiai_backend.entity.AiAttachmentKind.DOCUMENT and lower(a.mediaAsset.originalFilename) like lower(concat('%',:query,'%')) order by a.createdAt desc")
+    List<ConversationAttachment> searchOwned(UUID userId,String query,org.springframework.data.domain.Pageable page);
+
     boolean existsByMediaAssetId(UUID mediaAssetId);
 }

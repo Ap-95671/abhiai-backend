@@ -47,8 +47,12 @@ public class AiMemoryController {
     public ResponseEntity<UserMemoryResponse> create(
             @AuthenticationPrincipal JwtPrincipal principal,
             @Valid @RequestBody CreateMemoryRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(principal.userId(), request.content(), request.category()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createScoped(principal.userId(), request.content(), request.category(),request.scope(),request.scopeKey(),request.preferenceKey()));
     }
+
+    @PatchMapping("/items/{memoryId}")
+    public UserMemoryResponse edit(@AuthenticationPrincipal JwtPrincipal principal,@PathVariable UUID memoryId,
+        @Valid @RequestBody CreateMemoryRequest request) { return service.edit(principal.userId(),memoryId,request.content()); }
 
     @DeleteMapping("/items/{memoryId}")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal JwtPrincipal principal, @PathVariable UUID memoryId) {

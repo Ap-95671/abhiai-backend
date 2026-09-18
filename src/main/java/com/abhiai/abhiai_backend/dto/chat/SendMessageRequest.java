@@ -24,7 +24,14 @@ public record SendMessageRequest(
         String selectedModelId,
 
         Boolean fallbackAllowed,
-        @jakarta.validation.Valid com.abhiai.abhiai_backend.assistant.AssistantPageContext assistantContext) {
+        @jakarta.validation.Valid com.abhiai.abhiai_backend.assistant.AssistantPageContext assistantContext,
+        UUID assistantSessionId) {
+
+    public SendMessageRequest(String content, List<UUID> attachmentIds, boolean externalProcessingAllowed,
+            boolean webSearchAllowed, String selectionMode, String selectedModelId, Boolean fallbackAllowed,
+            com.abhiai.abhiai_backend.assistant.AssistantPageContext assistantContext) {
+        this(content, attachmentIds, externalProcessingAllowed, webSearchAllowed, selectionMode, selectedModelId, fallbackAllowed, assistantContext, null);
+    }
 
     public SendMessageRequest(String content, List<UUID> attachmentIds, boolean externalProcessingAllowed,
             boolean webSearchAllowed, String selectionMode, String selectedModelId, Boolean fallbackAllowed) {

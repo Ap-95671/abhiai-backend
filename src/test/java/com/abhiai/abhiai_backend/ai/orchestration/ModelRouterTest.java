@@ -51,6 +51,13 @@ class ModelRouterTest {
         assertThat(health.status("gemini", true)).isEqualTo(ModelStatus.RATE_LIMITED);
     }
 
+    @Test void unavailableManualProviderFallsBackOnlyWithExplicitPermission() {
+        var providers=Map.of("openai",configured("openai"));
+        var denied=new AiChatRequest(messages("hello"),List.of(),"MANUAL","gemini:gemini-test",false,null);
+        assertThatThrownBy(()->router.route(denied,providers)).isInstanceOf(ModelRoutingException.class);
+        var allowed=new AiChatRequest(messages("hello"),List.of(),"MANUAL","gemini:gemini-test",true,null);
+        assertThat(router.route(allowed,providers).candidates()).allMatch(m->m.provider().equals("openai"));
+    }
     private ModelProvider configured(String name) {
         ModelProvider provider = mock(ModelProvider.class);
         when(provider.providerName()).thenReturn(name);

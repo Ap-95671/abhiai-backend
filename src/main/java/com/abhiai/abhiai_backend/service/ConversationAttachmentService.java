@@ -187,6 +187,13 @@ public class ConversationAttachmentService {
                 .limit(3)
                 .map(item -> {
                     String text = item.getExtractedText();
+                    var pageMatch=java.util.regex.Pattern.compile("(?i)\\bpage\\s+(\\d{1,2})\\b").matcher(prompt);
+                    if(selectedIds.size()==1 && selectedIds.contains(item.getId()) && item.getMediaAsset().getContentType().equals("application/pdf") && pageMatch.find()) {
+                        int page=Integer.parseInt(pageMatch.group(1));
+                        try(var input=storage.load(item.getMediaAsset().getStorageKey()).getInputStream()) {
+                            text="[Requested PDF page "+page+"]\n"+documentExtraction.extractPdfPage(input.readAllBytes(),page);
+                        } catch(IOException failure){throw new InvalidMediaException("The requested PDF page could not be read.");}
+                    }
                     if (text.length() > 20_000) text = text.substring(0, 20_000);
                     return "Document: " + item.getMediaAsset().getOriginalFilename() + "\n" + text;
                 })
@@ -226,14 +233,28 @@ public class ConversationAttachmentService {
 
     @Transactional(readOnly = true)
     public java.util.Map<String,Object> assistantContext(UUID userId, UUID conversationId, UUID attachmentId) {
+        return assistantContext(userId,conversationId,attachmentId,null,"");
+    }
+    @Transactional(readOnly=true)
+    public java.util.Map<String,Object> assistantContext(UUID userId,UUID conversationId,UUID attachmentId,Integer page,String query) {
         requireOwnedConversation(userId, conversationId);
         var item = attachments.findById(attachmentId)
                 .filter(a -> a.getConversation().getId().equals(conversationId))
                 .filter(a -> a.getKind() == AiAttachmentKind.DOCUMENT && a.getProcessingStatus() == AiAttachmentStatus.READY)
                 .orElseThrow(() -> new InvalidMediaException("Document context is unavailable"));
-        return java.util.Map.of("title", item.getMediaAsset().getOriginalFilename(),
-                "text", com.abhiai.abhiai_backend.assistant.AssistantContextService.limited(item.getExtractedText(), 6000),
-                "coverage", "First 6000 extracted characters; current PDF page is not known.");
+        String text=item.getExtractedText();String coverage="Relevant excerpt from extracted document; page unknown.";
+        if(page!=null && item.getMediaAsset().getContentType().equals("application/pdf")) {
+            try(var input=storage.load(item.getMediaAsset().getStorageKey()).getInputStream()) {text=documentExtraction.extractPdfPage(input.readAllBytes(),page);coverage="PDF page "+page;}
+            catch(IOException e){throw new InvalidMediaException("The PDF page could not be read.");}
+        } else if(query!=null && !query.isBlank()) {
+            var terms=java.util.Arrays.stream(query.toLowerCase(Locale.ROOT).split("[^a-z0-9]+"))
+                .filter(t->t.length()>2).collect(java.util.stream.Collectors.toSet());
+            var chunks=new ArrayList<String>();
+            for(int i=0;text!=null && i<text.length();i+=1800)chunks.add(text.substring(i,Math.min(i+2200,text.length())));
+            text=chunks.stream().sorted(Comparator.comparingInt((String chunk)->relevance(chunk,terms)).reversed()).limit(3).collect(java.util.stream.Collectors.joining("\n…\n"));
+        }
+        return java.util.Map.of("title",item.getMediaAsset().getOriginalFilename(),"id",item.getId().toString(),"entityType","document",
+            "text",com.abhiai.abhiai_backend.assistant.AssistantContextService.limited(text,6000),"coverage",coverage);
     }
 
     public record PreparedAiInput(String prompt, List<AiInputAttachment> images) {

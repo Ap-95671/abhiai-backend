@@ -13,6 +13,7 @@ public class RealtimeSessionService {
     }
     private record Lease(UUID userId, Instant expiresAt) {}
     private final Map<UUID, Lease> leases = new HashMap<>();
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AssistantPreferencesService preferences;
     private final RealtimeGateway gateway;
     private final AssistantProperties settings;
     private final AssistantPolicy policy;
@@ -31,7 +32,7 @@ public class RealtimeSessionService {
             leases.put(id, lease);
         }
         try {
-            String token = gateway.create(expires);
+            String token = preferences==null?gateway.create(expires):gateway.create(expires,preferences.get(userId).mode());
             synchronized (leases) {
                 if (leases.get(id) != lease) throw new AssistantException(HttpStatus.CONFLICT, "Voice connection was cancelled. Please reconnect.");
             }

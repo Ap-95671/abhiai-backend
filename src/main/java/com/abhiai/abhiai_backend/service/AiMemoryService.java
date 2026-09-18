@@ -49,15 +49,37 @@ public class AiMemoryService {
 
     @Transactional
     public UserMemoryResponse create(UUID userId, String requestedContent, com.abhiai.abhiai_backend.entity.MemoryCategory category) {
-        User user = user(userId);
-        if (memories.countByUserId(userId) >= MAX_MEMORIES) {
-            throw new InvalidMemoryException("You can save up to " + MAX_MEMORIES + " memories. Delete one before adding another.");
-        }
-        String content = normalize(requestedContent);
-        validatePrivacy(content);
-        UserMemory memory = new UserMemory(user, content);
-        memory.categorize(category);
-        return UserMemoryResponse.from(memories.saveAndFlush(memory));
+        return createScoped(userId,requestedContent,category,com.abhiai.abhiai_backend.entity.MemoryScope.GLOBAL,"","");
+    }
+    @org.springframework.beans.factory.annotation.Autowired private com.abhiai.abhiai_backend.repository.ConversationRepository conversations;
+    @Transactional
+    public UserMemoryResponse createScoped(UUID userId,String requestedContent,com.abhiai.abhiai_backend.entity.MemoryCategory category,
+        com.abhiai.abhiai_backend.entity.MemoryScope requestedScope,String requestedKey,String requestedPreference) {
+        User user=users.lockAssistantOwner(userId).orElseThrow(UserNotFoundException::new);
+        var scope=requestedScope==null?com.abhiai.abhiai_backend.entity.MemoryScope.GLOBAL:requestedScope;
+        String key=scope==com.abhiai.abhiai_backend.entity.MemoryScope.GLOBAL?"":(requestedKey==null?"":requestedKey.trim());
+        if(scope!=com.abhiai.abhiai_backend.entity.MemoryScope.GLOBAL && key.isBlank()) throw new InvalidMemoryException("Choose a memory scope reference.");
+        if(key.length()>128) throw new InvalidMemoryException("Invalid memory scope.");
+        if(scope==com.abhiai.abhiai_backend.entity.MemoryScope.CONVERSATION)
+            conversations.findByIdAndUserId(UUID.fromString(key),userId).orElseThrow(()->new InvalidMemoryException("Conversation unavailable."));
+        if(scope==com.abhiai.abhiai_backend.entity.MemoryScope.SESSION) UUID.fromString(key);
+        String content=normalize(requestedContent);validatePrivacy(content);
+        String preference=requestedPreference==null?"":requestedPreference.trim().toLowerCase(java.util.Locale.ROOT);
+        if(preference.length()>80) throw new InvalidMemoryException("Invalid preference key.");
+        var existing=memories.findAllByUserIdOrderByUpdatedAtDesc(userId);
+        // Explicitly named preference slots replace an older value only within the same scope.
+        if(preference.isBlank() && (category==null || category==com.abhiai.abhiai_backend.entity.MemoryCategory.PREFERENCE))preference=preferenceSlot(content);
+        final String slot=preference;
+        var match=existing.stream().filter(m->m.getScope()==scope && m.getScopeKey().equals(key))
+            .filter(m->!slot.isBlank() && slot.equals(m.getPreferenceKey().isBlank()?preferenceSlot(m.getContent()):m.getPreferenceKey())).findFirst();
+        if(match.isPresent()) {var item=match.get();item.revise(content);item.categorize(category);return UserMemoryResponse.from(memories.saveAndFlush(item));}
+        if(existing.size()>=MAX_MEMORIES) throw new InvalidMemoryException("You can save up to 50 memories. Delete one first.");
+        UserMemory item=new UserMemory(user,content);item.categorize(category);item.scope(scope,key,preference);
+        return UserMemoryResponse.from(memories.saveAndFlush(item));
+    }
+    @Transactional public UserMemoryResponse edit(UUID userId,UUID id,String content) {
+        var item=memories.findByIdAndUserId(id,userId).orElseThrow(()->new InvalidMemoryException("Memory was not found"));
+        String value=normalize(content);validatePrivacy(value);item.revise(value);return UserMemoryResponse.from(memories.saveAndFlush(item));
     }
 
     @Transactional
@@ -83,17 +105,35 @@ public class AiMemoryService {
 
     @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public List<UserMemoryResponse> relevant(UUID userId, String query) {
+        return relevant(userId,query,"",null,null);
+    }
+    @Transactional(readOnly=true)
+    public List<UserMemoryResponse> relevant(UUID userId,String query,String project,UUID conversation,UUID session) {
         if (!user(userId).isAiMemoryEnabled()) return List.of();
         var terms = java.util.Arrays.stream((query == null ? "" : query).toLowerCase(java.util.Locale.ROOT).split("[^\\p{L}0-9]+"))
             .filter(term -> term.length() > 2).collect(java.util.stream.Collectors.toSet());
         return memories.findAllByUserIdOrderByUpdatedAtDesc(userId).stream()
+            .filter(m -> m.getExpiresAt()==null || m.getExpiresAt().isAfter(java.time.Instant.now()))
+            .filter(m -> switch(m.getScope()) {
+                case GLOBAL -> true;
+                case PROJECT -> project!=null && !project.isBlank() && m.getScopeKey().equals(project);
+                case CONVERSATION -> conversation!=null && m.getScopeKey().equals(conversation.toString());
+                case SESSION -> session!=null && m.getScopeKey().equals(session.toString());
+            })
             .filter(m -> privacySafe(m.getContent()))
             .filter(m -> m.getCategory() == com.abhiai.abhiai_backend.entity.MemoryCategory.PREFERENCE
                 || m.getCategory() == com.abhiai.abhiai_backend.entity.MemoryCategory.ASSISTANT_SETTING
                 || terms.stream().anyMatch(term -> m.getContent().toLowerCase(java.util.Locale.ROOT).contains(term)))
+            .sorted(java.util.Comparator.comparingDouble((UserMemory m)->
+                (m.getScope()==com.abhiai.abhiai_backend.entity.MemoryScope.GLOBAL?0:2)
+                + terms.stream().filter(term->m.getContent().toLowerCase(java.util.Locale.ROOT).contains(term)).count()).reversed())
             .limit(4).map(UserMemoryResponse::from).toList();
     }
 
+    private static String preferenceSlot(String content) {
+        String value=content.toLowerCase(java.util.Locale.ROOT);
+        return value.matches(".*(answer|response|explanation).*?") && value.matches(".*(concise|brief|short|detailed|detail|verbose|long).*?") ? "response length" : "";
+    }
     public static void validatePrivacy(String content) {
         if (!privacySafe(content)) throw new InvalidMemoryException("Save only preferences, interests or project notes. Secrets and sensitive personal details cannot be saved as memory.");
     }

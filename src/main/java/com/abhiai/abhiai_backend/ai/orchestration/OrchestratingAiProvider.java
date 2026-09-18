@@ -70,8 +70,8 @@ public class OrchestratingAiProvider implements AiProvider {
                 health.success(model.provider());
                 long latency = (System.nanoTime() - started) / 1_000_000;
                 log.info("ai_selected requestId={} provider={} model={} latencyMs={} fallback={}", requestId,
-                        model.provider(), model.providerModelId(), latency, attempts > 1);
-                return raw.attributed(model.provider(), model.providerModelId(), latency, attempts > 1);
+                        model.provider(), model.providerModelId(), latency, attempts > 1 || ("MANUAL".equals(request.selectionMode()) && !model.id().equals(request.selectedModelId())));
+                return raw.attributed(model.provider(), model.providerModelId(), latency, attempts > 1 || ("MANUAL".equals(request.selectionMode()) && !model.id().equals(request.selectedModelId())));
             } catch (AiProviderException exception) {
                 health.failure(model.provider(), exception);
                 lastFailure = exception;

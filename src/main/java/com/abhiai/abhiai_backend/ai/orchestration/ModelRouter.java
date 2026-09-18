@@ -27,7 +27,14 @@ public class ModelRouter {
         if (SelectionMode.from(request.selectionMode()) == SelectionMode.MANUAL) {
             AiModelDefinition selected = registry.find(request.selectedModelId())
                     .orElseThrow(() -> new ModelRoutingException("MODEL_NOT_FOUND", "The selected AI model does not exist."));
-            validate(selected, classification, providers);
+            try { validate(selected, classification, providers); }
+            catch(ModelRoutingException unavailable) {
+                if(!request.fallbackAllowed() || !unavailable.getCode().equals("MODEL_UNAVAILABLE"))throw unavailable;
+                var alternatives=eligible(classification,providers).stream().filter(m->!m.id().equals(selected.id()))
+                    .sorted(Comparator.comparingDouble((AiModelDefinition m)->score(m,classification)).reversed()).toList();
+                if(alternatives.isEmpty())throw unavailable;
+                return new RoutingDecision(classification,alternatives,"User-approved fallback because selected provider is unavailable");
+            }
             List<AiModelDefinition> candidates = request.fallbackAllowed()
                     ? appendFallbacks(selected, classification, providers)
                     : List.of(selected);

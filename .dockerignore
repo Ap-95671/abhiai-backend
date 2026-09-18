@@ -4,3 +4,4 @@
 .cursor
 target
 .env
+.env.*

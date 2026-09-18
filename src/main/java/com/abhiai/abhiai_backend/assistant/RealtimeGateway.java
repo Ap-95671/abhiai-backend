@@ -25,13 +25,16 @@ public class RealtimeGateway {
         return settings.isVoiceEnabled() && gemini.getApiKey() != null && !gemini.getApiKey().isBlank();
     }
     public String create(Instant expiresAt) {
+        return create(expiresAt,"STANDARD");
+    }
+    public String create(Instant expiresAt,String mode) {
         if (!available()) throw unavailable();
         Map<String, Object> setup = Map.of(
                 "model", "models/" + settings.getModel(),
                 "tools", List.of(Map.of("functionDeclarations", AssistantToolRegistry.declarations())),
                 "generationConfig", Map.of("responseModalities", List.of("AUDIO"), "maxOutputTokens", 2048,
                         "speechConfig", Map.of("voiceConfig", Map.of("prebuiltVoiceConfig", Map.of("voiceName", settings.getVoice())))),
-                "systemInstruction", Map.of("parts", List.of(Map.of("text", AssistantPersonality.INSTRUCTIONS))),
+                "systemInstruction", Map.of("parts", List.of(Map.of("text", AssistantPersonality.INSTRUCTIONS+"\n"+AssistantPreferencesService.style(mode)))),
                 "inputAudioTranscription", Map.of(), "outputAudioTranscription", Map.of(),
                 "realtimeInputConfig", Map.of("automaticActivityDetection", Map.of("silenceDurationMs", 700)));
         // Raw REST uses bidiGenerateContentSetup. liveConnectConstraints is an SDK input field.

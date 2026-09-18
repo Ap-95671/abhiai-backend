@@ -59,6 +59,8 @@ public class ChatService {
     private com.abhiai.abhiai_backend.assistant.AssistantPolicy assistantPolicy;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.abhiai.abhiai_backend.assistant.AssistantIntelligence assistantIntelligence;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.abhiai.abhiai_backend.assistant.AssistantPreferencesService assistantPreferences;
     @org.springframework.beans.factory.annotation.Value("${app.ai.gemini.model:gemini-3.5-flash}")
     private String assistantTextModel = "gemini-3.5-flash";
 
@@ -253,9 +255,20 @@ public class ChatService {
             Message userMessage,
             SendMessageRequest request, Consumer<Object> onAssistantEvent) {
         if (conversation.isCharacterAssistant() && assistantIntelligence != null) {
-            var bounded = contextBuilder.build(history, new AiChatMessage(MessageRole.USER, request.content()));
-            return new PreparedAiRequest(routedRequest(assistantIntelligence.prepare(userId,bounded,request.content(),
-                request.assistantContext(),onAssistantEvent),List.of(),conversation,request),List.of());
+            var prepared = attachmentService == null
+                ? new ConversationAttachmentService.PreparedAiInput(request.content(),List.of())
+                : attachmentService.prepareForMessage(conversation.getId(),request.content(),request.attachmentIds(),request.externalProcessingAllowed(),userMessage);
+            var bounded = contextBuilder.build(history, new AiChatMessage(MessageRole.USER, prepared.prompt()));
+            var messages=assistantIntelligence.prepare(userId,bounded,request.content(),request.assistantContext(),onAssistantEvent,conversation.getId(),request.assistantSessionId());
+            var settings=assistantPreferences==null?null:assistantPreferences.get(userId);
+            var withPersonality=new java.util.ArrayList<AiChatMessage>();
+            withPersonality.add(new AiChatMessage(MessageRole.SYSTEM,
+                com.abhiai.abhiai_backend.assistant.AssistantPersonality.INSTRUCTIONS+"\n"+
+                com.abhiai.abhiai_backend.assistant.AssistantPreferencesService.style(settings==null?"STANDARD":settings.mode())));
+            withPersonality.addAll(messages);
+            boolean fallback=settings!=null && settings.fallbackAllowed();
+            if(fallback)onAssistantEvent.accept(java.util.Map.of("notice","Text fallback is enabled; another configured provider may answer if Gemini is unavailable."));
+            return new PreparedAiRequest(new AiChatRequest(withPersonality,prepared.images(),"MANUAL","gemini:"+assistantTextModel,fallback,null),List.of());
         }
         if (attachmentService == null) {
             applyRequestedPreference(conversation, request);

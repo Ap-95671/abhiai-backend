@@ -161,9 +161,9 @@ Image generation uses the same server-side boundary. Configure
 `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` to use Cloudflare Workers AI
 with `@cf/black-forest-labs/flux-1-schnell` as the default image model. The
 Workers AI call is made directly by the backend; no Cloudflare credential is
-sent to the browser. Gemini image generation remains available, while fallback
-from Cloudflare to Gemini is disabled unless `GEMINI_IMAGE_FALLBACK_ENABLED=true`
-is intentionally configured.
+sent to the browser. Explicit image requests always use Cloudflare, without Gemini
+fallback. Legacy `IMAGE_GENERATION_PROVIDER` and `GEMINI_IMAGE_FALLBACK_ENABLED`
+settings cannot change this route. Gemini text/chat is independent.
 
 An empty or missing key keeps that provider unavailable. The model catalog must not advertise an unconfigured provider as ready.
 

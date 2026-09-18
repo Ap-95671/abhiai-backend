@@ -43,5 +43,7 @@ class DocumentExtractionServiceTest {
         String text = new DocumentExtractionService().extractPdf(pdf);
 
         assertTrue(text.contains("AbhiAI private document retrieval works correctly."));
+        assertTrue(new DocumentExtractionService().extractPdfPage(pdf,1).contains("AbhiAI private document"));
+        org.junit.jupiter.api.Assertions.assertThrows(com.abhiai.abhiai_backend.exception.InvalidMediaException.class,()->new DocumentExtractionService().extractPdfPage(pdf,4));
     }
 }

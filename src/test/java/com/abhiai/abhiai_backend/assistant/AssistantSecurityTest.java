@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.mockito.Mockito.*;
 
-@WebMvcTest({AssistantController.class, AssistantToolsController.class})
+@WebMvcTest({AssistantController.class, AssistantToolsController.class, AgentController.class})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 class AssistantSecurityTest {
     @Autowired MockMvc mvc;
@@ -24,6 +24,15 @@ class AssistantSecurityTest {
     @MockitoBean RealtimeSessionService sessions;
     @MockitoBean RealtimeGateway gateway;
     @MockitoBean AssistantToolRegistry tools;
+    @MockitoBean AgentOrchestrator agent;
+    @MockitoBean AssistantPreferencesService preferences;
+    @Test void agentHistoryAndPreferencesRequireAuthentication() throws Exception {
+        mvc.perform(get("/api/v1/assistant/tasks")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/assistant/preferences")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/assistant/tasks").contentType("application/json").content("{}"))
+            .andExpect(status().isUnauthorized());
+        verifyNoInteractions(agent,preferences);
+    }
     @Test void anonymousRequestsCannotCreateSessionsOrReadHistory() throws Exception {
         mvc.perform(post("/api/v1/assistant/sessions").contentType("application/json").content("{}"))
             .andExpect(status().isUnauthorized());

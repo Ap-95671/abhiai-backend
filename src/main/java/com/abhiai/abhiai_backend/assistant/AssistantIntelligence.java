@@ -11,6 +11,8 @@ import tools.jackson.databind.ObjectMapper;
 /** Bounded structured planning followed by the existing text stream. Planning failure preserves ordinary chat. */
 @Service
 public class AssistantIntelligence {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AssistantPreferencesService preferences;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.abhiai.abhiai_backend.service.AiMemoryService memory;
     private final GeminiProvider gemini;
     private final AssistantToolRegistry tools;
     private final ObjectMapper mapper;
@@ -19,7 +21,20 @@ public class AssistantIntelligence {
     }
     public List<AiChatMessage> prepare(UUID userId,List<AiChatMessage> history,String query,
                                      AssistantPageContext page,Consumer<Object> events) {
+        return prepare(userId,history,query,page,events,null);
+    }
+    public List<AiChatMessage> prepare(UUID userId,List<AiChatMessage> history,String query,
+        AssistantPageContext page,Consumer<Object> events,UUID conversationId) {
+        return prepare(userId,history,query,page,events,conversationId,null);
+    }
+    public List<AiChatMessage> prepare(UUID userId,List<AiChatMessage> history,String query,
+        AssistantPageContext page,Consumer<Object> events,UUID conversationId,UUID sessionId) {
+        if(preferences!=null && !preferences.get(userId).pageContext())page=null;
         var context=tools.environment(userId,page,query);
+        if(memory!=null && preferences!=null) {
+            context=new LinkedHashMap<>(context);
+            context.put("preferences",memory.relevant(userId,query,preferences.get(userId).projectKey(),conversationId,sessionId));
+        }
         var data=new AiChatMessage(MessageRole.USER,mapper.writeValueAsString(Map.of("UNTRUSTED_CURRENT_CONTEXT",context)));
         var messages=new ArrayList<>(history);
         messages.add(Math.max(0,messages.size()-1),data);

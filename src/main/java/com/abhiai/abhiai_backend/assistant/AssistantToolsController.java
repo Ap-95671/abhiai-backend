@@ -11,7 +11,7 @@ import com.abhiai.abhiai_backend.security.JwtPrincipal;
 @RequestMapping("/api/v1/assistant")
 public class AssistantToolsController {
     public record ToolRequest(@NotNull UUID conversationId,@NotBlank @Size(max=48) String name,
-        @NotNull @Size(max=1) Map<@Size(max=20) String,@NotNull @Size(max=3000) String> arguments,
+        @NotNull @Size(max=1) Map<@Size(max=20) String,@NotNull @Size(max=6000) String> arguments,
         @Valid AssistantPageContext context) {}
     private final AssistantToolRegistry tools;
     private final AssistantPolicy policy;

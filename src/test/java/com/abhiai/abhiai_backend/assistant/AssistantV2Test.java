@@ -48,7 +48,9 @@ class AssistantV2Test {
         assertThrows(AssistantException.class,()->AssistantToolRegistry.validate("SEARCH_ABHIAI",Map.of("query","a")));
         assertThrows(AssistantException.class,()->AssistantToolRegistry.validate("SET_EXPRESSION",Map.of("expression","execute")));
         assertDoesNotThrow(()->AssistantToolRegistry.validate("SEARCH_ABHIAI",Map.of("query","Java")));
-        assertTrue(AssistantToolRegistry.DEFINITIONS.stream().noneMatch(d->d.permission()==AssistantToolRegistry.Permission.CONFIRMATION_REQUIRED));
+        assertEquals(List.of("SAVE_POST"),AssistantToolRegistry.DEFINITIONS.stream().filter(d->d.permission()==AssistantToolRegistry.Permission.CONFIRMATION_REQUIRED).map(AssistantToolRegistry.Definition::name).toList());
+        var registry=new AssistantToolRegistry(mock(AssistantContextService.class),mock(SearchService.class),mock(PostBookmarkService.class),mock(PostAccessService.class),mock(AiMemoryService.class));
+        assertThrows(AssistantException.class,()->registry.execute(user,"SAVE_POST",Map.of("id",UUID.randomUUID().toString()),null));
     }
     @Test void draftAndMemoryProposalDoNotMutateAnyDomainService() {
         var memory=mock(AiMemoryService.class);var search=mock(SearchService.class);var bookmarks=mock(PostBookmarkService.class);
@@ -58,6 +60,18 @@ class AssistantV2Test {
         var proposal=registry.execute(user,"PROPOSE_MEMORY",Map.of("text","I prefer concise explanations"),null);
         assertEquals("memory",proposal.kind());verifyNoInteractions(memory,search,bookmarks);
         assertThrows(RuntimeException.class,()->registry.execute(user,"PROPOSE_MEMORY",Map.of("text","My API key is secret"),null));
+    }
+    @Test void documentConsentCannotBeReusedForAnotherAttachment() {
+        var registry=new AssistantToolRegistry(mock(AssistantContextService.class),mock(SearchService.class),mock(PostBookmarkService.class),mock(PostAccessService.class),mock(AiMemoryService.class));
+        var attachments=mock(ConversationAttachmentService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(registry,"attachments",attachments);
+        var conversation=UUID.randomUUID();var approved=UUID.randomUUID();var other=UUID.randomUUID();
+        var page=new AssistantPageContext("document","/",approved.toString(),conversation.toString(),"Notes",null,true,4,null);
+        assertThrows(AssistantException.class,()->registry.execute(user,"GET_DOCUMENT",Map.of("reference",conversation+"/"+other),page));
+        verifyNoInteractions(attachments);
+        when(attachments.assistantContext(user,conversation,approved,4,null)).thenReturn(Map.of("title","Page 4"));
+        var result=registry.execute(user,"GET_DOCUMENT",Map.of("reference",conversation+"/"+approved),page);
+        assertEquals("Page 4",result.cards().getFirst().get("title"));
     }
     @Test void plannerFailureStillReturnsCurrentInstructionAndContextForNormalChat() {
         var gemini=mock(GeminiProvider.class);var registry=mock(AssistantToolRegistry.class);

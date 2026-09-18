@@ -15,6 +15,7 @@ public class AssistantConversationService {
     public record TranscriptItem(@NotBlank @Size(max = 128) @Pattern(regexp = "[A-Za-z0-9_-]+") String id,
                                  @NotNull MessageRole role, @NotBlank @Size(max = 10000) String content) {}
     public record TranscriptBatch(@NotEmpty @Size(max = 40) List<@Valid TranscriptItem> messages) {}
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.abhiai.abhiai_backend.service.ConversationAttachmentService attachments;
     private final ConversationRepository conversations;
     private final MessageRepository messages;
     private final UserRepository users;
@@ -42,7 +43,7 @@ public class AssistantConversationService {
     }
     private ConversationDetailResponse detail(Conversation c) {
         return ConversationDetailResponse.from(c, messages.findAllByConversationIdOrderByCreatedAtAscIdAsc(c.getId())
-                .stream().map(MessageResponse::from).toList());
+                .stream().map(m->attachments==null?MessageResponse.from(m):MessageResponse.from(m,attachments.responsesForMessage(m.getId()))).toList());
     }
     @Transactional
     public void append(UUID userId, UUID id, TranscriptBatch batch) {

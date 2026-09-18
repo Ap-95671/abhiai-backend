@@ -51,6 +51,16 @@ public class DocumentExtractionService {
         }
     }
 
+    public String extractPdfPage(byte[] content,int page) {
+        try(PDDocument document=Loader.loadPDF(content)) {
+            if(page<1 || page>document.getNumberOfPages())throw new InvalidMediaException("That PDF page does not exist.");
+            var stripper=new PDFTextStripper();stripper.setStartPage(page);stripper.setEndPage(page);
+            String text=stripper.getText(document).trim();
+            if(text.isBlank())throw new InvalidMediaException("No text is available on that page. Try the full extracted document.");
+            return text.substring(0,Math.min(6000,text.length()));
+        } catch(IOException e){throw new InvalidMediaException("The PDF page could not be read.");}
+    }
+
     public String extractText(byte[] content) {
         if (content == null || content.length == 0) {
             throw new InvalidMediaException("The text document is empty");

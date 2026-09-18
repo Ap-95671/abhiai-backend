@@ -43,6 +43,19 @@ public class UserMemory {
     public String getSource() { return source; }
     public void categorize(MemoryCategory category) { this.category = category == null ? MemoryCategory.PREFERENCE : category; }
 
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(nullable=false,length=24) private MemoryScope scope=MemoryScope.GLOBAL;
+    @Column(nullable=false,length=128) private String scopeKey="";
+    @Column(nullable=false,length=80) private String preferenceKey="";
+    private Instant expiresAt;
+    public MemoryScope getScope(){return scope;}
+    public String getScopeKey(){return scopeKey;}
+    public String getPreferenceKey(){return preferenceKey;}
+    public Instant getExpiresAt(){return expiresAt;}
+    public void scope(MemoryScope value,String key,String preference){scope=value;scopeKey=key;preferenceKey=preference;
+        expiresAt=value==MemoryScope.SESSION?Instant.now().plusSeconds(86400):null;}
+    public void revise(String value){content=value;if(scope==MemoryScope.SESSION)expiresAt=Instant.now().plusSeconds(86400);}
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
