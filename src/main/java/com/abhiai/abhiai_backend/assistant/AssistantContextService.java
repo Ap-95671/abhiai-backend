@@ -12,6 +12,7 @@ import com.abhiai.abhiai_backend.dto.post.PostResponse;
 
 @Service
 public class AssistantContextService {
+    @org.springframework.beans.factory.annotation.Autowired private StoryService stories;
     private final NewsService news;
     private final PostAccessService posts;
     private final UserProfileService profiles;
@@ -35,15 +36,28 @@ public class AssistantContextService {
         if(context==null) return Map.of("available",false,"reason","Page context is disabled or unavailable.");
         Map<String,Object> data = new LinkedHashMap<>();
         data.put("pageType",context.pageType());
+        data.put("route",limited(context.route(),240));
+        data.put("section",limited(context.currentSection(),240));
+        data.put("region",limited(context.region(),80));
+        if(context.entityId()==null || context.entityId().isBlank()) {
+            data.put("title",limited(context.title()==null?context.pageType():context.title(),240));
+            data.put("visibleSummary",limited(context.summary(),4000));
+        }
         if(context.entityId()!=null && !context.entityId().isBlank()) switch(context.pageType()) {
             case "news" -> {
                 var article=news.get(context.entityId());
                 data.putAll(Map.of("id",article.id(),"title",limited(article.title(),240),
                     "text",limited(article.description(),4000),"source",limited(article.sourceName(),160),
+                    "category",limited(article.category(),120),"publishedAt",String.valueOf(article.publishedAt()),"url",limited(article.articleUrl(),1000),
                     "coverage","Publisher metadata only, not the full article. Do not invent paragraphs.",
                     "href","/news#"+java.net.URLEncoder.encode(article.id(),java.nio.charset.StandardCharsets.UTF_8)));
             }
-            case "post" -> data.putAll(post(PostResponse.from(posts.findViewablePost(userId,UUID.fromString(context.entityId())))));
+            case "post", "video" -> data.putAll(post(PostResponse.from(posts.findViewablePost(userId,UUID.fromString(context.entityId())))));
+            case "story" -> {
+                var story=stories.get(userId,UUID.fromString(context.entityId()));
+                data.putAll(Map.of("id",story.id().toString(),"title","Story by @"+story.author().username(),
+                    "text",limited(story.textContent(),3000),"type",story.type().name(),"expiresAt",story.expiresAt().toString()));
+            }
             case "profile" -> {
                 var profile=profiles.getByUsername(userId,context.entityId());
                 data.putAll(Map.of("title",limited(profile.displayName(),120),"username",profile.username(),

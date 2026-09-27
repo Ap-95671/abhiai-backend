@@ -129,6 +129,9 @@ public class SocialNotificationService {
         }
         if (blockPolicyService != null && blockPolicyService.isBlockedEitherDirection(actor.getId(), recipient.getId())) return;
         if (muteService != null && muteService.muted(recipient.getId(), actor.getId(), null)) return;
+        // Serialize the existing idempotency check and insert, including concurrent requests.
+        // Reply events remain independent; no broad actor/text-based suppression.
+        if (idempotent) userRepository.lockNotificationRecipient(recipient.getId()).orElseThrow(UserNotFoundException::new);
         UUID postId = post == null ? null : post.getId();
         if (idempotent && notificationRepository.existsEquivalentEvent(
                 recipient.getId(), actor.getId(), type, postId)) {

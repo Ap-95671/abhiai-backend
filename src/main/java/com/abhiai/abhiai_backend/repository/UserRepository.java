@@ -20,6 +20,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select u from User u where u.id = :id")
     Optional<User> lockAssistantOwner(@Param("id") UUID id);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> lockNotificationRecipient(@Param("id") UUID id);
+
     @Query("""
             select user
             from User user
