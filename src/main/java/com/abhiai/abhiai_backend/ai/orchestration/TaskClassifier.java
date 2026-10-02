@@ -1,33 +1,38 @@
 package com.abhiai.abhiai_backend.ai.orchestration;
 
 import java.util.EnumSet;
-import java.util.Locale;
-
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
 import com.abhiai.abhiai_backend.ai.AiChatRequest;
+import com.abhiai.abhiai_backend.ai.pipeline.IntentClassifier;
+import com.abhiai.abhiai_backend.ai.pipeline.TaskAnalyzer;
 
+/** Existing classification entry point, now backed by separate intent and complexity analysis. */
 @Component
 public class TaskClassifier {
+    private final IntentClassifier intents;
+    private final TaskAnalyzer analyzer;
+
+    public TaskClassifier() { this(new IntentClassifier(), new TaskAnalyzer()); }
+    @Autowired
+    public TaskClassifier(IntentClassifier intents, TaskAnalyzer analyzer) { this.intents = intents; this.analyzer = analyzer; }
 
     public TaskClassification classify(AiChatRequest request) {
-        String text = request.messages().isEmpty() ? "" : request.messages().getLast().content().toLowerCase(Locale.ROOT);
+        var intent = intents.classify(request.originalMessage());
         var capabilities = EnumSet.of(ModelCapability.TEXT);
-        TaskType type = TaskType.GENERAL;
-        if (!request.attachments().isEmpty()) { type = TaskType.VISION; capabilities.add(ModelCapability.VISION); }
-        else if (contains(text, "code", "debug", "java", "python", "typescript", "sql", "api")) { type = TaskType.CODE; capabilities.add(ModelCapability.CODE); }
-        else if (contains(text, "prove", "reason", "analyze", "compare", "architecture", "step by step")) { type = TaskType.REASONING; capabilities.add(ModelCapability.REASONING); }
-        else if (contains(text, "summarize", "summary", "tl;dr")) type = TaskType.SUMMARIZATION;
-        else if (contains(text, "write a story", "poem", "creative", "brainstorm")) type = TaskType.CREATIVE;
-        else if (contains(text, "latest", "research", "sources", "search the web")) { type = TaskType.RESEARCH; capabilities.add(ModelCapability.TOOLS); }
-        int length = text.length();
-        RequestComplexity complexity = length > 4000 || capabilities.contains(ModelCapability.REASONING)
-                ? RequestComplexity.HIGH : length > 800 ? RequestComplexity.MEDIUM : RequestComplexity.LOW;
-        return new TaskClassification(type, complexity, capabilities);
-    }
-
-    private boolean contains(String text, String... needles) {
-        for (String needle : needles) if (text.contains(needle)) return true;
-        return false;
+        TaskType type = switch (intent) {
+            case CODING -> TaskType.CODE;
+            case REASONING, DATA_ANALYSIS, PLANNING -> TaskType.REASONING;
+            case CREATIVE_WRITING -> TaskType.CREATIVE;
+            case SUMMARIZATION, DOCUMENT_ANALYSIS -> TaskType.SUMMARIZATION;
+            case CURRENT_INFORMATION -> TaskType.RESEARCH;
+            default -> TaskType.GENERAL;
+        };
+        if (type == TaskType.CODE) capabilities.add(ModelCapability.CODE);
+        if (type == TaskType.REASONING) capabilities.add(ModelCapability.REASONING);
+        if (!request.attachments().isEmpty()) { capabilities.add(ModelCapability.VISION); type = TaskType.VISION; }
+        // Web search is performed by the existing opt-in tool registry, not fabricated by model routing.
+        int characters = request.messages().stream().mapToInt(m -> m.content().length()).sum();
+        return new TaskClassification(type, analyzer.analyze(intent, request.originalMessage(), characters), capabilities);
     }
 }

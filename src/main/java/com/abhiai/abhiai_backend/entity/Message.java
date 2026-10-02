@@ -63,6 +63,20 @@ public class Message {
     @Column(name = "fallback_used")
     private Boolean fallbackUsed;
 
+    @Column(name = "ai_request_id", length = 64) private String aiRequestId;
+    @Column(name = "ai_intent", length = 32) private String aiIntent;
+    @Column(name = "ai_task_type", length = 32) private String aiTaskType;
+    @Column(name = "ai_complexity", length = 16) private String aiComplexity;
+    @Column(name = "ai_strategy", length = 40) private String aiStrategy;
+    @Column(name = "ai_quality_score") private Integer aiQualityScore;
+    @Column(name = "ai_feedback") private Boolean aiFeedback;
+    public String getAiRequestId() { return aiRequestId; }
+    public String getAiIntent() { return aiIntent; }
+    public String getAiTaskType() { return aiTaskType; }
+    public String getAiStrategy() { return aiStrategy; }
+    public Boolean getAiFeedback() { return aiFeedback; }
+    public void recordAiFeedback(boolean positive) { aiFeedback = positive; }
+
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "message_citations", joinColumns = @JoinColumn(name = "message_id"))
     @OrderColumn(name = "position")
@@ -88,6 +102,12 @@ public class Message {
         this.outputTokens = completion.outputTokens();
         this.latencyMs = completion.latencyMs();
         this.fallbackUsed = completion.fallbackUsed();
+        var execution = completion.execution();
+        if (execution != null) {
+            this.aiRequestId = execution.requestId(); this.aiIntent = execution.intent().name();
+            this.aiTaskType = execution.taskType().name(); this.aiComplexity = execution.complexity().name();
+            this.aiStrategy = execution.strategy().name(); this.aiQualityScore = execution.qualityScore();
+        }
     }
 
     public void replaceCitations(List<MessageCitation> values) {

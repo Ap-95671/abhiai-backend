@@ -44,14 +44,15 @@ public class AnthropicModelProvider implements ModelProvider {
         try {
             HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300)
-                throw new AiProviderException(response.statusCode() == 429 ? "Anthropic rate limit or quota was reached." : "Anthropic could not complete the request.");
+                throw new AiProviderException("Anthropic could not complete the request.",
+                        com.abhiai.abhiai_backend.exception.AiProviderFailureKind.httpStatus(response.statusCode()));
             JsonNode root = mapper.readTree(response.body());
             StringBuilder text = new StringBuilder();
             root.path("content").forEach(node -> { if ("text".equals(node.path("type").asString())) text.append(node.path("text").asString()); });
             if (text.isEmpty()) throw new AiProviderException("Anthropic returned no assistant message");
             return new AiCompletion(text.toString(), "anthropic", root.path("model").asString(request.providerModelId()),
-                    root.path("stop_reason").asString(null), root.path("usage").path("input_tokens").asInt(),
-                    root.path("usage").path("output_tokens").asInt(), 0, false);
+                    root.path("stop_reason").asString(null), root.path("usage").path("input_tokens").isNumber() ? root.path("usage").path("input_tokens").asInt() : null,
+                    root.path("usage").path("output_tokens").isNumber() ? root.path("usage").path("output_tokens").asInt() : null, 0, false);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt(); throw new AiProviderException("Anthropic request was interrupted", exception);
         } catch (IOException exception) { throw new AiProviderException("Anthropic request failed", exception); }
@@ -61,10 +62,26 @@ public class AnthropicModelProvider implements ModelProvider {
         ObjectNode payload = mapper.createObjectNode();
         payload.put("model", request.providerModelId() == null ? properties.getModel() : request.providerModelId());
         payload.put("max_tokens", 4096);
-        if (properties.getInstructions() != null) payload.put("system", properties.getInstructions());
+        StringBuilder system = new StringBuilder(properties.getInstructions() == null ? "" : properties.getInstructions());
+        request.messages().stream().filter(m -> m.role() == com.abhiai.abhiai_backend.entity.MessageRole.SYSTEM)
+                .forEach(m -> system.append("\n").append(m.content()));
+        payload.put("system", system.toString());
         ArrayNode messages = payload.putArray("messages");
-        request.messages().forEach(message -> messages.addObject()
-                .put("role", message.role().name().toLowerCase(Locale.ROOT)).put("content", message.content()));
+        for (int index = 0; index < request.messages().size(); index++) {
+            var message = request.messages().get(index);
+            if (message.role() == com.abhiai.abhiai_backend.entity.MessageRole.SYSTEM) continue;
+            var item = messages.addObject().put("role", message.role().name().toLowerCase(Locale.ROOT));
+            if (index == request.messages().size() - 1 && message.role() == com.abhiai.abhiai_backend.entity.MessageRole.USER
+                    && !request.attachments().isEmpty()) {
+                var content = item.putArray("content");
+                for (var attachment : request.attachments()) {
+                    var source = content.addObject().put("type", "image").putObject("source");
+                    source.put("type", "base64").put("media_type", attachment.contentType())
+                            .put("data", java.util.Base64.getEncoder().encodeToString(attachment.content()));
+                }
+                content.addObject().put("type", "text").put("text", message.content());
+            } else item.put("content", message.content());
+        }
         return mapper.writeValueAsString(payload);
     }
     private String url() {

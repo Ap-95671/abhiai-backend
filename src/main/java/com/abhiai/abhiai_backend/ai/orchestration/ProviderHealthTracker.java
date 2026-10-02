@@ -1,72 +1,75 @@
 package com.abhiai.abhiai_backend.ai.orchestration;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.abhiai.abhiai_backend.config.AiOrchestrationProperties;
+import com.abhiai.abhiai_backend.exception.*;
 
-import com.abhiai.abhiai_backend.exception.AiProviderException;
-import com.abhiai.abhiai_backend.exception.AiProviderFailureKind;
-
+/** Passive circuit breaker. Routing reads availability; execution atomically claims a half-open probe. */
 @Component
 public class ProviderHealthTracker {
-    private static final int FAILURE_THRESHOLD = 3;
-    private static final Duration COOLDOWN = Duration.ofSeconds(45);
-    private final Map<String, State> states = new ConcurrentHashMap<>();
+    public enum Circuit { CLOSED, OPEN, HALF_OPEN }
+    private final Map<String, State> states = new HashMap<>();
     private final Clock clock;
+    private final AiOrchestrationProperties properties;
+    public ProviderHealthTracker() { this(Clock.systemUTC(), new AiOrchestrationProperties()); }
+    ProviderHealthTracker(Clock clock) { this(clock, new AiOrchestrationProperties()); }
+    @Autowired public ProviderHealthTracker(AiOrchestrationProperties properties) { this(Clock.systemUTC(), properties); }
+    ProviderHealthTracker(Clock clock, AiOrchestrationProperties properties) { this.clock = clock; this.properties = properties; }
 
-    public ProviderHealthTracker() { this(Clock.systemUTC()); }
-    ProviderHealthTracker(Clock clock) { this.clock = clock; }
-
-    public boolean canAttempt(String provider) {
+    public synchronized boolean canAttempt(String provider) {
         State state = states.get(provider);
-        if (state == null) return true;
-        if (state.terminal) return false;
-        if (state.rateLimited) return cooldownElapsed(state);
-        if (state.failures < FAILURE_THRESHOLD) return true;
-        return cooldownElapsed(state);
+        return state == null || state.openUntil == null || (!clock.instant().isBefore(state.openUntil)
+                && (state.probeUntil == null || !clock.instant().isBefore(state.probeUntil)));
     }
-
-    public ModelStatus status(String provider, boolean configured) {
+    public synchronized boolean tryAcquire(String provider) {
+        if (!canAttempt(provider)) return false;
+        State state = states.get(provider);
+        if (state != null && state.openUntil != null) state.probeUntil = clock.instant().plusSeconds(120);
+        return true;
+    }
+    public synchronized void abandon(String provider) {
+        State state = states.get(provider);
+        if (state != null) state.probeUntil = null;
+    }
+    public synchronized Circuit circuit(String provider) {
+        State state = states.get(provider);
+        if (state == null || state.openUntil == null) return Circuit.CLOSED;
+        return clock.instant().isBefore(state.openUntil) ? Circuit.OPEN : Circuit.HALF_OPEN;
+    }
+    public synchronized ModelStatus status(String provider, boolean configured) {
         if (!configured) return ModelStatus.UNAVAILABLE;
         State state = states.get(provider);
-        if (state == null || state.failures == 0) return ModelStatus.AVAILABLE;
-        if (state.terminal) return ModelStatus.UNAVAILABLE;
-        if (!canAttempt(provider) && state.rateLimited) return ModelStatus.RATE_LIMITED;
-        return canAttempt(provider) ? ModelStatus.DEGRADED : ModelStatus.UNAVAILABLE;
+        if (state == null) return ModelStatus.AVAILABLE;
+        if (circuit(provider) == Circuit.OPEN) return state.rateLimited ? ModelStatus.RATE_LIMITED : ModelStatus.UNAVAILABLE;
+        return ModelStatus.DEGRADED;
     }
-
-    public void success(String provider) { states.remove(provider); }
-
-    public void failure(String provider) {
-        failure(provider, null);
+    public synchronized void success(String provider) {
+        // An older in-flight success must not immediately close a newly opened circuit.
+        if (circuit(provider) != Circuit.OPEN) states.remove(provider);
     }
-
-    public void failure(String provider, Throwable failure) {
+    public void failure(String provider) { failure(provider, null); }
+    public synchronized void failure(String provider, Throwable failure) {
+        var kind = AiProviderFailureKind.classify(failure);
+        if (kind == AiProviderFailureKind.INVALID_REQUEST || kind == AiProviderFailureKind.CONTENT_RESTRICTION) {
+            abandon(provider); return;
+        }
         String message = failure == null || failure.getMessage() == null ? "" : failure.getMessage().toLowerCase(java.util.Locale.ROOT);
-        AiProviderFailureKind kind = failure instanceof AiProviderException providerFailure
-                ? providerFailure.kind()
-                : AiProviderFailureKind.UNKNOWN;
-        boolean rateLimited = kind == AiProviderFailureKind.RATE_LIMIT
-                || message.contains("rate limit") || message.contains("quota") || message.contains("429");
+        boolean rateLimited = kind == AiProviderFailureKind.RATE_LIMIT || message.contains("429") || message.contains("quota");
         boolean terminal = switch (kind) {
             case AUTHENTICATION, AUTHORIZATION, BILLING, MODEL_UNAVAILABLE, CONFIGURATION -> true;
-            default -> message.contains("rejected its api credentials")
-                    || message.contains("requires available api balance")
-                    || message.contains("http 402")
-                    || message.contains("not configured");
+            default -> false;
         };
-        states.compute(provider, (key, old) -> new State(old == null ? 1 : old.failures + 1, clock.instant(),
-                rateLimited || old != null && old.rateLimited,
-                terminal || old != null && old.terminal));
+        State state = states.computeIfAbsent(provider, ignored -> new State());
+        state.failures++;
+        state.rateLimited = rateLimited;
+        if (terminal || rateLimited || state.openUntil != null || state.failures >= properties.getCircuitFailureThreshold())
+            state.openUntil = clock.instant().plus(terminal ? properties.getAuthenticationCooldown() : properties.getCircuitCooldown());
+        state.probeUntil = null;
     }
-
-    private boolean cooldownElapsed(State state) {
-        return !clock.instant().isBefore(state.lastFailure.plus(COOLDOWN));
-    }
-
-    private record State(int failures, Instant lastFailure, boolean rateLimited, boolean terminal) { }
+    private static class State { int failures; boolean rateLimited; Instant openUntil; Instant probeUntil; }
 }

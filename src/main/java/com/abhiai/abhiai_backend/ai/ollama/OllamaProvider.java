@@ -60,9 +60,13 @@ public class OllamaProvider implements ModelProvider {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AiProviderException("Ollama could not complete the request. Start Ollama and pull the configured model.");
+                throw new AiProviderException("Ollama could not complete the request. Start Ollama and pull the configured model.",
+                        com.abhiai.abhiai_backend.exception.AiProviderFailureKind.httpStatus(response.statusCode()));
             }
-            return new AiCompletion(extractAssistantText(objectMapper.readTree(response.body())));
+            var root = objectMapper.readTree(response.body());
+            return new AiCompletion(extractAssistantText(root), "ollama", root.path("model").asString(request.providerModelId()),
+                    root.path("done_reason").asString(null), root.path("prompt_eval_count").isNumber() ? root.path("prompt_eval_count").asInt() : null,
+                    root.path("eval_count").isNumber() ? root.path("eval_count").asInt() : null, 0, false);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AiProviderException("Ollama request was interrupted", exception);

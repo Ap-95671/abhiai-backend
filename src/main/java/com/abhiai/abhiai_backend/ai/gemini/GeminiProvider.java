@@ -64,9 +64,15 @@ public class GeminiProvider implements ModelProvider {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AiProviderException(providerFailureMessage(response));
+                throw new AiProviderException(providerFailureMessage(response),
+                        com.abhiai.abhiai_backend.exception.AiProviderFailureKind.httpStatus(response.statusCode()));
             }
-            return new AiCompletion(extractAssistantText(objectMapper.readTree(response.body())));
+            var root = objectMapper.readTree(response.body());
+            var usage = root.path("usageMetadata");
+            return new AiCompletion(extractAssistantText(root), "gemini", root.path("modelVersion").asString(request.providerModelId()),
+                    root.path("candidates").path(0).path("finishReason").asString(null),
+                    usage.path("promptTokenCount").isNumber() ? usage.path("promptTokenCount").asInt() : null,
+                    usage.path("candidatesTokenCount").isNumber() ? usage.path("candidatesTokenCount").asInt() : null, 0, false);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AiProviderException("Gemini request was interrupted", exception);
@@ -88,6 +94,8 @@ public class GeminiProvider implements ModelProvider {
                 .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(request)))
                 .build();
         StringBuilder completion = new StringBuilder();
+        Integer[] tokens = {null, null};
+        String[] finishReason = {null};
         try {
             HttpResponse<java.util.stream.Stream<String>> response = httpClient.send(
                     httpRequest, HttpResponse.BodyHandlers.ofLines());
@@ -95,13 +103,18 @@ public class GeminiProvider implements ModelProvider {
                 try (java.util.stream.Stream<String> lines = response.body()) {
                     throw new AiProviderException(providerFailureMessage(
                             response.statusCode(),
-                            lines.collect(java.util.stream.Collectors.joining("\n"))));
+                            lines.collect(java.util.stream.Collectors.joining("\n"))),
+                            com.abhiai.abhiai_backend.exception.AiProviderFailureKind.httpStatus(response.statusCode()));
                 }
             }
             try (java.util.stream.Stream<String> lines = response.body()) {
                 lines.filter(line -> line.startsWith("data:")).forEach(line -> {
                     var frame = objectMapper.readTree(line.substring(5).trim());
+                    var usage = frame.path("usageMetadata");
+                    if (usage.path("promptTokenCount").isNumber()) tokens[0] = usage.path("promptTokenCount").asInt();
+                    if (usage.path("candidatesTokenCount").isNumber()) tokens[1] = usage.path("candidatesTokenCount").asInt();
                     String reason = frame.path("candidates").path(0).path("finishReason").asString("");
+                    if (!reason.isBlank()) finishReason[0] = reason;
                     if (!reason.isBlank() && !reason.equals("STOP"))
                         org.slf4j.LoggerFactory.getLogger(getClass()).warn("gemini_stream_finish reason={}", reason.replaceAll("[^A-Z_]", ""));
                     String chunk = extractAssistantTextOrEmpty(frame);
@@ -115,7 +128,7 @@ public class GeminiProvider implements ModelProvider {
             if (completion.isEmpty()) {
                 throw new AiProviderException("Gemini returned no assistant message");
             }
-            return new AiCompletion(completion.toString());
+            return new AiCompletion(completion.toString(), "gemini", request.providerModelId(), finishReason[0], tokens[0], tokens[1], 0, false);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AiProviderException("Gemini stream was interrupted", exception);
@@ -133,6 +146,11 @@ public class GeminiProvider implements ModelProvider {
     }
 
     private static String extractAssistantTextOrEmpty(JsonNode response) {
+        String reason = response.path("candidates").path(0).path("finishReason").asString("");
+        if (!response.path("promptFeedback").path("blockReason").asString("").isBlank()
+                || java.util.Set.of("SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII").contains(reason))
+            throw new AiProviderException("The AI provider could not fulfill this request.",
+                    com.abhiai.abhiai_backend.exception.AiProviderFailureKind.CONTENT_RESTRICTION);
         StringBuilder content = new StringBuilder();
         for (JsonNode part : response.path("candidates").path(0).path("content").path("parts")) {
             if (!part.path("thought").asBoolean(false)) content.append(part.path("text").asString());

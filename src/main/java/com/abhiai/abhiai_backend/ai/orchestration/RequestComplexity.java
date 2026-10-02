@@ -1,3 +1,3 @@
 package com.abhiai.abhiai_backend.ai.orchestration;
 
-public enum RequestComplexity { LOW, MEDIUM, HIGH }
+public enum RequestComplexity { LOW, MEDIUM, HIGH, VERY_HIGH }

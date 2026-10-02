@@ -61,7 +61,12 @@ public class GroqProvider implements ModelProvider {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw providerFailure(response.statusCode(), response.body());
             }
-            return new AiCompletion(extractAssistantText(objectMapper.readTree(response.body())));
+            var root = objectMapper.readTree(response.body());
+            var usage = root.path("usage");
+            return new AiCompletion(extractAssistantText(root), "groq", root.path("model").asString(request.providerModelId()),
+                    root.path("choices").path(0).path("finish_reason").asString(null),
+                    usage.path("prompt_tokens").isNumber() ? usage.path("prompt_tokens").asInt() : null,
+                    usage.path("completion_tokens").isNumber() ? usage.path("completion_tokens").asInt() : null, 0, false);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AiProviderException("Groq request was interrupted", exception);
@@ -101,7 +106,7 @@ public class GroqProvider implements ModelProvider {
         if (status >= 500) {
             return new AiProviderException("Groq is temporarily unavailable.", AiProviderFailureKind.UPSTREAM_UNAVAILABLE);
         }
-        return new AiProviderException("Groq rejected the request (HTTP " + status + ").");
+        return new AiProviderException("Groq rejected the request (HTTP " + status + ").", AiProviderFailureKind.httpStatus(status));
     }
 
     private String buildRequestBody(AiChatRequest request) {

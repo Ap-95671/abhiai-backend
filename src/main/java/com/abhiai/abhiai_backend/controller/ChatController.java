@@ -116,6 +116,13 @@ public class ChatController {
                 .body(chatService.addUserMessage(principal.userId(), conversationId, request));
     }
 
+    @PostMapping("/{conversationId}/messages/{messageId}/feedback")
+    public ResponseEntity<Void> feedback(@AuthenticationPrincipal JwtPrincipal principal, @PathVariable UUID conversationId,
+            @PathVariable UUID messageId, @Valid @RequestBody com.abhiai.abhiai_backend.dto.chat.ResponseFeedbackRequest request) {
+        chatService.recordFeedback(principal.userId(), conversationId, messageId, request.positive());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping(value = "/{conversationId}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamUserMessage(
             @AuthenticationPrincipal JwtPrincipal principal,
@@ -133,7 +140,9 @@ public class ChatController {
         emitter.onCompletion(cancelStream);
         emitter.onTimeout(cancelStream);
 
+        var correlation = org.slf4j.MDC.getCopyOfContextMap();
         CompletableFuture.runAsync(() -> {
+            if (correlation != null) org.slf4j.MDC.setContextMap(correlation);
             streamThread.set(Thread.currentThread());
             try {
                 ChatExchangeResponse exchange = chatService.addUserMessageStreaming(
@@ -147,7 +156,7 @@ public class ChatController {
                 emitter.complete();
             } catch (Exception exception) {
                 completeWithSafeError(emitter, exception);
-            }
+            } finally { org.slf4j.MDC.clear(); }
         }, aiStreamingExecutor);
 
         return emitter;

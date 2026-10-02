@@ -9,7 +9,7 @@ public class AiProviderException extends RuntimeException {
     }
 
     public AiProviderException(String message, Throwable cause) {
-        this(message, AiProviderFailureKind.UNKNOWN, cause);
+        this(message, AiProviderFailureKind.classify(cause), cause);
     }
 
     public AiProviderException(String message, AiProviderFailureKind kind) {

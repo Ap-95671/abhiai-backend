@@ -31,18 +31,24 @@ public class ImageGenerationService {
     private final ConversationAttachmentRepository attachments;
     private final MediaService mediaService;
     private final ImageGenerationProvider provider;
+    private final com.abhiai.abhiai_backend.ai.pipeline.AiRequestProcessor processor;
+    private final com.abhiai.abhiai_backend.ai.orchestration.ExecutionPlanner planner;
 
     public ImageGenerationService(
             ConversationRepository conversations,
             MessageRepository messages,
             ConversationAttachmentRepository attachments,
             MediaService mediaService,
-            ImageGenerationProvider provider) {
+            ImageGenerationProvider provider,
+            com.abhiai.abhiai_backend.ai.pipeline.AiRequestProcessor processor,
+            com.abhiai.abhiai_backend.ai.orchestration.ExecutionPlanner planner) {
         this.conversations = conversations;
         this.messages = messages;
         this.attachments = attachments;
         this.mediaService = mediaService;
         this.provider = provider;
+        this.processor = processor;
+        this.planner = planner;
     }
 
     @Transactional
@@ -59,6 +65,10 @@ public class ImageGenerationService {
         }
 
         Message userMessage = messages.save(new Message(conversation, MessageRole.USER, prompt));
+        var normalized = processor.processImage(prompt);
+        var plan = planner.plan(normalized, List.of());
+        org.slf4j.LoggerFactory.getLogger(getClass()).info("ai_plan requestId={} intent={} capability={} strategy={} provider=cloudflare",
+                normalized.requestId(), normalized.intent(), normalized.capability(), plan.strategy());
         var generated = provider.generate(prompt);
         Message assistantMessage = messages.save(new Message(
                 conversation,

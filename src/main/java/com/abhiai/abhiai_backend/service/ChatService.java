@@ -56,6 +56,35 @@ public class ChatService {
     private final ConversationAttachmentService attachmentService;
     private final AiToolRegistry toolRegistry;
     private final AiMemoryService memoryService;
+    private com.abhiai.abhiai_backend.ai.pipeline.AiRequestProcessor requestProcessor;
+    private ImageGenerationService imageGeneration;
+    private com.abhiai.abhiai_backend.ai.orchestration.RoutingMetrics routingMetrics = new com.abhiai.abhiai_backend.ai.orchestration.RoutingMetrics();
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setRoutingMetrics(com.abhiai.abhiai_backend.ai.orchestration.RoutingMetrics metrics) { routingMetrics = metrics; }
+
+    @Transactional
+    public void recordFeedback(UUID userId, UUID conversationId, UUID messageId, boolean positive) {
+        Message message = messageRepository.findOwnedForFeedback(messageId, conversationId, userId)
+                .orElseThrow(ConversationNotFoundException::new);
+        if (message.getRole() != MessageRole.ASSISTANT || message.getAiRequestId() == null)
+            throw new ModelRoutingException("FEEDBACK_UNAVAILABLE", "Feedback is available for AI answers with execution metadata.");
+        routingMetrics.feedback(new com.abhiai.abhiai_backend.ai.orchestration.RoutingMetrics.Key(message.getAiProvider(), message.getAiModel(),
+                com.abhiai.abhiai_backend.ai.pipeline.Intent.valueOf(message.getAiIntent()),
+                com.abhiai.abhiai_backend.ai.orchestration.TaskType.valueOf(message.getAiTaskType()),
+                com.abhiai.abhiai_backend.ai.orchestration.ExecutionStrategy.valueOf(message.getAiStrategy())), message.getAiFeedback(), positive);
+        message.recordAiFeedback(positive);
+    }
+
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setImagePipeline(com.abhiai.abhiai_backend.ai.pipeline.AiRequestProcessor processor, ImageGenerationService images) {
+        this.requestProcessor = processor;
+        this.imageGeneration = images;
+    }
+
+    private boolean imageRequest(SendMessageRequest request) {
+        return requestProcessor != null && requestProcessor.isImageRequest(request.content());
+    }
     private com.abhiai.abhiai_backend.assistant.AssistantPolicy assistantPolicy;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.abhiai.abhiai_backend.assistant.AssistantIntelligence assistantIntelligence;
@@ -186,13 +215,21 @@ public class ChatService {
 
     @Transactional
     public ChatExchangeResponse addUserMessage(UUID userId, UUID conversationId, SendMessageRequest request) {
+        try (var trace = com.abhiai.abhiai_backend.config.RequestCorrelationFilter.scope()) {
+            return addUserMessageTraced(userId, conversationId, request);
+        }
+    }
+
+    private ChatExchangeResponse addUserMessageTraced(UUID userId, UUID conversationId, SendMessageRequest request) {
         Conversation conversation = findConversationOwnedByUser(userId, conversationId);
         guardAssistant(userId, conversation);
+        if (imageRequest(request)) return imageGeneration.generate(userId, conversationId, request.content());
         List<Message> history = messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId);
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
         PreparedAiRequest prepared = prepareAiRequest(userId, conversation, history, userMessage, request, ignored -> {});
-        AiCompletion completion = aiProvider.generate(prepared.request());
+        AiCompletion completion = aiProvider.generate(prepared.request().withOriginalMessage(request.content()).withExecutionContext(conversationId,
+                prepared.sources().isEmpty() ? List.of() : List.of("web_search")));
         Message assistantMessage = new Message(conversation, MessageRole.ASSISTANT, completion.content());
         assistantMessage.applyAiMetadata(completion);
         assistantMessage.replaceCitations(toMessageCitations(prepared.sources()));
@@ -207,26 +244,34 @@ public class ChatService {
     @Transactional
     public ChatExchangeResponse addUserMessageStreaming(
             UUID userId, UUID conversationId, SendMessageRequest request, Consumer<String> onTextChunk) {
-        return addUserMessageInternal(userId, conversationId, request, onTextChunk, ignored -> {});
+        return addUserMessageStreaming(userId, conversationId, request, onTextChunk, ignored -> {});
     }
 
     @Transactional
     public ChatExchangeResponse addUserMessageStreaming(UUID userId, UUID conversationId, SendMessageRequest request,
             Consumer<String> onTextChunk, Consumer<Object> onAssistantEvent) {
-        return addUserMessageInternal(userId, conversationId, request, onTextChunk, onAssistantEvent);
+        try (var trace = com.abhiai.abhiai_backend.config.RequestCorrelationFilter.scope()) {
+            return addUserMessageInternal(userId, conversationId, request, onTextChunk, onAssistantEvent);
+        }
     }
 
     private ChatExchangeResponse addUserMessageInternal(
             UUID userId, UUID conversationId, SendMessageRequest request, Consumer<String> onTextChunk, Consumer<Object> onAssistantEvent) {
         Conversation conversation = findConversationOwnedByUser(userId, conversationId);
         guardAssistant(userId, conversation);
+        if (imageRequest(request)) {
+            var exchange = imageGeneration.generate(userId, conversationId, request.content());
+            onTextChunk.accept(exchange.assistantMessage().content());
+            return exchange;
+        }
         List<Message> history = messageRepository.findAllByConversationIdOrderByCreatedAtAscIdAsc(conversationId);
         assignGeneratedTitleIfNeeded(conversation, history, request.content());
         Message userMessage = messageRepository.save(new Message(conversation, MessageRole.USER, request.content()));
 
         PreparedAiRequest prepared = prepareAiRequest(userId, conversation, history, userMessage, request, onAssistantEvent);
         AiCompletion completion = aiProvider.generateStream(
-                prepared.request(),
+                prepared.request().withOriginalMessage(request.content()).withExecutionContext(conversationId,
+                prepared.sources().isEmpty() ? List.of() : List.of("web_search")),
                 onTextChunk);
         Message assistantMessage = new Message(
                 conversation,
@@ -254,10 +299,13 @@ public class ChatService {
             List<Message> history,
             Message userMessage,
             SendMessageRequest request, Consumer<Object> onAssistantEvent) {
+        AiToolRegistry.AugmentedPrompt augmented = toolRegistry == null
+                ? new AiToolRegistry.AugmentedPrompt(request.content(), List.of())
+                : toolRegistry.augmentPromptWithSources(request.content(), request.webSearchAllowed());
         if (conversation.isCharacterAssistant() && assistantIntelligence != null) {
             var prepared = attachmentService == null
-                ? new ConversationAttachmentService.PreparedAiInput(request.content(),List.of())
-                : attachmentService.prepareForMessage(conversation.getId(),request.content(),request.attachmentIds(),request.externalProcessingAllowed(),userMessage);
+                ? new ConversationAttachmentService.PreparedAiInput(augmented.prompt(),List.of())
+                : attachmentService.prepareForMessage(conversation.getId(),augmented.prompt(),request.attachmentIds(),request.externalProcessingAllowed(),userMessage);
             var bounded = contextBuilder.build(history, new AiChatMessage(MessageRole.USER, prepared.prompt()));
             var messages=assistantIntelligence.prepare(userId,bounded,request.content(),request.assistantContext(),onAssistantEvent,conversation.getId(),request.assistantSessionId());
             var settings=assistantPreferences==null?null:assistantPreferences.get(userId);
@@ -268,30 +316,15 @@ public class ChatService {
             withPersonality.addAll(messages);
             boolean fallback=settings!=null && settings.fallbackAllowed();
             if(fallback)onAssistantEvent.accept(java.util.Map.of("notice","Text fallback is enabled; another configured provider may answer if Gemini is unavailable."));
-            return new PreparedAiRequest(new AiChatRequest(withPersonality,prepared.images(),"MANUAL","gemini:"+assistantTextModel,fallback,null),List.of());
+            return new PreparedAiRequest(new AiChatRequest(withPersonality,prepared.images(),"MANUAL","gemini:"+assistantTextModel,fallback,null),augmented.sources());
         }
-        if (attachmentService == null) {
-            applyRequestedPreference(conversation, request);
-            String rememberedPrompt = memoryService == null
-                    ? userMessage.getContent()
-                    : memoryService.augmentPrompt(userId, userMessage.getContent());
-            return new PreparedAiRequest(routedRequest(contextBuilder.build(
-                    history,
-                    new AiChatMessage(userMessage.getRole(), rememberedPrompt)), List.of(), conversation, request), List.of());
-        }
-
-        AiToolRegistry.AugmentedPrompt augmented = toolRegistry == null
-                ? new AiToolRegistry.AugmentedPrompt(request.content(), List.of())
-                : toolRegistry.augmentPromptWithSources(request.content(), request.webSearchAllowed());
         String augmentedWithMemory = memoryService == null
                 ? augmented.prompt()
                 : memoryService.augmentPrompt(userId, augmented.prompt());
-        var prepared = attachmentService.prepareForMessage(
-                conversation.getId(),
-                augmentedWithMemory,
-                request.attachmentIds(),
-                request.externalProcessingAllowed(),
-                userMessage);
+        var prepared = attachmentService == null
+                ? new ConversationAttachmentService.PreparedAiInput(augmentedWithMemory, List.of())
+                : attachmentService.prepareForMessage(conversation.getId(), augmentedWithMemory,
+                        request.attachmentIds(), request.externalProcessingAllowed(), userMessage);
         if (!prepared.images().isEmpty() && !aiProvider.supportsImageUnderstanding()) {
             throw new com.abhiai.abhiai_backend.exception.AiProviderException(
                     aiProvider.providerName() + " does not support image understanding with the selected model");
@@ -366,7 +399,7 @@ public class ChatService {
 
     private List<MessageCitation> toMessageCitations(List<WebSearchSource> sources) {
         return sources.stream()
-                .map(source -> new MessageCitation(source.title(), source.url(), source.domain()))
+                .map(source -> new MessageCitation(source.title(), source.url(), source.domain(), source.description(), source.sourceDate(), source.retrievedAt()))
                 .toList();
     }
 

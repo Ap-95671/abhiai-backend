@@ -32,7 +32,9 @@ class OrchestratingAiProviderTest {
                 "grok-test", "deepseek-test", "mistral-test", "cohere-test", "router-test");
         var health = new ProviderHealthTracker();
         orchestrator = new OrchestratingAiProvider(List.of(openai, gemini),
-                new ModelRouter(registry, new TaskClassifier(), health), health);
+                new ModelRouter(registry, new TaskClassifier(), health), health, PipelineTestSupport.processor(),
+                new ExecutionPlanner(new com.abhiai.abhiai_backend.config.AiOrchestrationProperties()),
+                mock(MultiModelOrchestrator.class), new com.abhiai.abhiai_backend.ai.pipeline.ResponseProcessor());
     }
 
     @Test void fallsBackBeforeAnyStreamingContentIsEmitted() {

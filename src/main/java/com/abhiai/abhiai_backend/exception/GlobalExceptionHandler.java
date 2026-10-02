@@ -345,7 +345,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleModelRouting(ModelRoutingException exception, WebRequest request) {
         HttpStatus status = switch (exception.getCode()) {
             case "MODEL_NOT_FOUND" -> HttpStatus.NOT_FOUND;
-            case "MODEL_REQUIRED", "INVALID_SELECTION_MODE", "CAPABILITY_MISMATCH" -> HttpStatus.BAD_REQUEST;
+            case "MODEL_REQUIRED", "INVALID_SELECTION_MODE", "CAPABILITY_MISMATCH", "FEEDBACK_UNAVAILABLE" -> HttpStatus.BAD_REQUEST;
             case "MODEL_COMING_SOON" -> HttpStatus.CONFLICT;
             default -> HttpStatus.SERVICE_UNAVAILABLE;
         };

@@ -37,6 +37,22 @@ class AiConversationContextBuilderTest {
     }
 
     @Test
+    void providerContextKeepsSystemPolicyAndNewestMessagesWithinHistoryBudget() {
+        AiContextProperties properties = new AiContextProperties();
+        properties.setMaxMessages(2);
+        var builder = new AiConversationContextBuilder(properties);
+        var result = builder.buildProviderContext(List.of(
+                new AiChatMessage(MessageRole.SYSTEM, "Backend instruction"),
+                new AiChatMessage(MessageRole.USER, "old"),
+                new AiChatMessage(MessageRole.ASSISTANT, "recent"),
+                new AiChatMessage(MessageRole.USER, "current")));
+        assertEquals(List.of(MessageRole.SYSTEM, MessageRole.SYSTEM, MessageRole.ASSISTANT, MessageRole.USER),
+                result.stream().map(AiChatMessage::role).toList());
+        assertEquals("recent", result.get(2).content());
+        assertEquals("current", result.getLast().content());
+    }
+
+    @Test
     void alwaysIncludesCurrentMessage() {
         AiContextProperties properties = new AiContextProperties();
         properties.setMaxCharacters(1);

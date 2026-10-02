@@ -25,7 +25,7 @@ public class ModelCatalogService {
     public List<ModelOptionResponse> getModels() {
         return registry.all().stream().map(model -> {
             ModelProvider provider = providers.get(model.provider());
-            boolean configured = provider != null && provider.configured();
+            boolean configured = model.status() != com.abhiai.abhiai_backend.ai.orchestration.ModelStatus.UNAVAILABLE && provider != null && provider.configured();
             String status = model.status() == com.abhiai.abhiai_backend.ai.orchestration.ModelStatus.COMING_SOON
                     ? model.status().name() : health.status(model.provider(), configured).name();
             return new ModelOptionResponse(model.id(), model.provider(), model.displayName(), model.description(),

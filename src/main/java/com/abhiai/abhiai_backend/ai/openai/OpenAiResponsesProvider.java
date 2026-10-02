@@ -57,10 +57,15 @@ public class OpenAiResponsesProvider implements ModelProvider {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new AiProviderException(providerFailureMessage(response.statusCode()));
+                throw new AiProviderException(providerFailureMessage(response.statusCode()),
+                        com.abhiai.abhiai_backend.exception.AiProviderFailureKind.httpStatus(response.statusCode()));
             }
 
-            return new AiCompletion(extractAssistantText(objectMapper.readTree(response.body())));
+            var root = objectMapper.readTree(response.body());
+            var usage = root.path("usage");
+            return new AiCompletion(extractAssistantText(root), "openai", root.path("model").asString(request.providerModelId()),
+                    root.path("status").asString(null), usage.path("input_tokens").isNumber() ? usage.path("input_tokens").asInt() : null,
+                    usage.path("output_tokens").isNumber() ? usage.path("output_tokens").asInt() : null, 0, false);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AiProviderException("The AI provider request was interrupted", exception);
@@ -78,6 +83,9 @@ public class OpenAiResponsesProvider implements ModelProvider {
             }
 
             for (JsonNode contentItem : outputItem.path("content")) {
+                if ("refusal".equals(contentItem.path("type").asString()))
+                    throw new AiProviderException("The AI provider could not fulfill this request.",
+                            com.abhiai.abhiai_backend.exception.AiProviderFailureKind.CONTENT_RESTRICTION);
                 if ("output_text".equals(contentItem.path("type").asString())) {
                     content.append(contentItem.path("text").asString());
                 }

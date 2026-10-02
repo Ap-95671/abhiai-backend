@@ -18,6 +18,20 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String REQUEST_ID_MDC_KEY = "requestId";
 
+    public static String currentId() {
+        String id = MDC.get(REQUEST_ID_MDC_KEY);
+        return id == null ? UUID.randomUUID().toString() : id;
+    }
+
+    public static Scope scope() {
+        boolean created = MDC.get(REQUEST_ID_MDC_KEY) == null;
+        if (created) MDC.put(REQUEST_ID_MDC_KEY, UUID.randomUUID().toString());
+        return new Scope(created);
+    }
+    public record Scope(boolean created) implements AutoCloseable {
+        @Override public void close() { if (created) MDC.remove(REQUEST_ID_MDC_KEY); }
+    }
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -25,7 +39,7 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
             FilterChain filterChain) throws ServletException, IOException {
 
         String requestId = request.getHeader(REQUEST_ID_HEADER);
-        if (requestId == null || requestId.isBlank()) {
+        if (requestId == null || !requestId.matches("[A-Za-z0-9_-]{1,64}")) {
             requestId = UUID.randomUUID().toString();
         }
 

@@ -32,6 +32,7 @@ import tools.jackson.databind.ObjectMapper;
         ImageGenerationRoutingProperties.class,
         AiContextProperties.class,
         WebSearchProperties.class,
+        AiOrchestrationProperties.class,
         MultiProviderProperties.class
 })
 public class AiConfig {
@@ -47,6 +48,22 @@ public class AiConfig {
     public ExecutorService aiStreamingExecutor() {
         int threadCount = Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors()));
         return Executors.newFixedThreadPool(threadCount);
+    }
+
+    // Separate bounded workers prevent streaming parent requests from starving their own child stages.
+    @Bean(name = "aiOrchestrationExecutor", destroyMethod = "shutdownNow")
+    public ExecutorService aiOrchestrationExecutor() {
+        return new java.util.concurrent.ThreadPoolExecutor(6, 6, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<>(32),
+                Thread.ofPlatform().name("ai-stage-", 0).factory(),
+                new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    }
+
+    @Bean(name = "aiMetricsExecutor", destroyMethod = "shutdown")
+    public ExecutorService aiMetricsExecutor() {
+        return new java.util.concurrent.ThreadPoolExecutor(1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<>(256), Thread.ofPlatform().name("ai-metrics-", 0).factory(),
+                new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
     }
 
     @Bean ModelProvider anthropicProvider(HttpClient aiHttpClient, ObjectMapper mapper, MultiProviderProperties properties) {

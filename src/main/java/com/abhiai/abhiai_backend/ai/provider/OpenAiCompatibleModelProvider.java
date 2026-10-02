@@ -98,7 +98,7 @@ public class OpenAiCompatibleModelProvider implements ModelProvider {
             return new AiProviderException(providerName + " rate limit or quota was reached.", AiProviderFailureKind.RATE_LIMIT);
         if (status >= 500)
             return new AiProviderException(providerName + " is temporarily unavailable.", AiProviderFailureKind.UPSTREAM_UNAVAILABLE);
-        return new AiProviderException(providerName + " could not complete the request (HTTP " + status + ").");
+        return new AiProviderException(providerName + " could not complete the request (HTTP " + status + ").", AiProviderFailureKind.httpStatus(status));
     }
 
     private boolean notBlank(String value) { return value != null && !value.isBlank(); }
