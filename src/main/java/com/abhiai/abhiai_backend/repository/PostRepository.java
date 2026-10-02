@@ -27,6 +27,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
     @EntityGraph(attributePaths = {"author", "media", "community"})
     @Query(value = """
             select post from Post post
+            left join post.community profileCommunity
             where post.author.id = :profileUserId
               and post.deletedAt is null
               and not exists (select block.id from UserBlock block where
@@ -38,7 +39,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                 or exists (select privacyFollow.id from Follow privacyFollow
                   where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
               )
-              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or profileCommunity.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
@@ -50,6 +51,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
             order by post.pinnedAt desc, post.createdAt desc, post.id desc
             """, countQuery = """
             select count(post) from Post post
+            left join post.community profileCommunity
             where post.author.id = :profileUserId
               and post.deletedAt is null
               and not exists (select block.id from UserBlock block where
@@ -61,7 +63,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                 or exists (select privacyFollow.id from Follow privacyFollow
                   where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
               )
-              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or profileCommunity.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
@@ -88,6 +90,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
     @EntityGraph(attributePaths = {"author", "media", "community"})
     @Query(value = """
             select post from Post post
+            left join post.community profileCommunity
             where post.author.id = :profileUserId
               and post.deletedAt is null
               and not exists (select block.id from UserBlock block where
@@ -100,7 +103,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                   where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
               )
               and exists (select media.id from MediaAsset media where media.post.id = post.id)
-              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or profileCommunity.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
@@ -112,6 +115,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
             order by post.createdAt desc, post.id desc
             """, countQuery = """
             select count(post) from Post post
+            left join post.community profileCommunity
             where post.author.id = :profileUserId
               and post.deletedAt is null
               and not exists (select block.id from UserBlock block where
@@ -124,7 +128,7 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
                   where privacyFollow.follower.id = :viewerId and privacyFollow.following.id = post.author.id)
               )
               and exists (select media.id from MediaAsset media where media.post.id = post.id)
-              and (post.author.id = :viewerId or post.community is null or post.community.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
+              and (post.author.id = :viewerId or post.community is null or profileCommunity.privacy = com.abhiai.abhiai_backend.entity.CommunityPrivacy.PUBLIC)
               and (
                 post.author.id = :viewerId
                 or post.visibility = com.abhiai.abhiai_backend.entity.PostVisibility.PUBLIC
