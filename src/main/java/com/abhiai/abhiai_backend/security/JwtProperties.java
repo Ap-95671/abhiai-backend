@@ -20,6 +20,17 @@ public class JwtProperties {
     @NotNull(message = "JWT access-token TTL must be configured")
     private Duration accessTokenTtl = Duration.ofMinutes(15);
 
+    private Duration refreshTokenTtl = Duration.ofDays(30);
+    private Duration sessionTokenTtl = Duration.ofDays(1);
+    public Duration getRefreshTokenTtl() { return refreshTokenTtl; }
+    public void setRefreshTokenTtl(Duration value) { refreshTokenTtl = positive(value); }
+    public Duration getSessionTokenTtl() { return sessionTokenTtl; }
+    public void setSessionTokenTtl(Duration value) { sessionTokenTtl = positive(value); }
+    private Duration positive(Duration value) {
+        if (value == null || value.isNegative() || value.isZero()) throw new IllegalArgumentException("Session TTL must be positive");
+        return value;
+    }
+
     public String getSecret() {
         return secret;
     }

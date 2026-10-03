@@ -15,6 +15,10 @@ import com.abhiai.abhiai_backend.service.AuthService;
 import com.abhiai.abhiai_backend.service.UserService;
 
 import jakarta.validation.Valid;
+import com.abhiai.abhiai_backend.dto.auth.SessionTokenResponse;
+import com.abhiai.abhiai_backend.dto.auth.RefreshRequest;
+import com.abhiai.abhiai_backend.service.RefreshSessionService;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -23,7 +27,10 @@ public class AuthController {
     private final UserService userService;
     private final AuthService authService;
 
-    public AuthController(UserService userService, AuthService authService) {
+    private final RefreshSessionService sessions;
+
+    public AuthController(UserService userService, AuthService authService, RefreshSessionService sessions) {
+        this.sessions = sessions;
         this.userService = userService;
         this.authService = authService;
     }
@@ -34,7 +41,21 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthTokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<SessionTokenResponse> login(@Valid @RequestBody LoginRequest request,
+            @RequestParam(defaultValue = "true") boolean rememberMe) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(sessions.create(authService.login(request), rememberMe));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthTokenResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(sessions.refresh(request.refreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
+        sessions.revoke(request.refreshToken());
+        return ResponseEntity.noContent().build();
     }
 }
