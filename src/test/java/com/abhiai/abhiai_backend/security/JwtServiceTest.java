@@ -14,7 +14,7 @@ class JwtServiceTest {
         JwtProperties properties = new JwtProperties();
         properties.setSecret("test-only-jwt-secret-that-is-long-enough-for-hs256");
         properties.setAccessTokenTtl(Duration.ofMinutes(15));
-        JwtService jwtService = new JwtService(properties);
+        JwtService jwtService = new JwtService(properties, org.mockito.Mockito.mock(com.abhiai.abhiai_backend.repository.RefreshSessionRepository.class));
         UUID userId = UUID.randomUUID();
 
         String token = jwtService.generateAccessToken(userId, "user@example.com");

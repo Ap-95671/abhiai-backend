@@ -16,6 +16,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 class JwtAuthenticationFilterTest {
+    private final UUID authenticatedUser = UUID.randomUUID();
 
     @AfterEach
     void clearSecurityContext() {
@@ -26,9 +27,9 @@ class JwtAuthenticationFilterTest {
     void validBearerTokenCreatesAuthenticatedPrincipal() throws Exception {
         JwtService jwtService = jwtService();
         JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService);
-        UUID userId = UUID.randomUUID();
+        UUID userId = authenticatedUser;
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("Authorization", "Bearer " + jwtService.generateAccessToken(userId, "user@example.com"));
+        request.addHeader("Authorization", "Bearer " + jwtService.generateAccessToken(userId, "user@example.com", "session"));
 
         filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 
@@ -54,6 +55,9 @@ class JwtAuthenticationFilterTest {
         JwtProperties properties = new JwtProperties();
         properties.setSecret("test-only-jwt-secret-that-is-long-enough-for-hs256");
         properties.setAccessTokenTtl(Duration.ofMinutes(15));
-        return new JwtService(properties);
+        var sessions = org.mockito.Mockito.mock(com.abhiai.abhiai_backend.repository.RefreshSessionRepository.class);
+        org.mockito.Mockito.when(sessions.findById("session")).thenAnswer(invocation -> java.util.Optional.of(
+                new com.abhiai.abhiai_backend.entity.RefreshSession("session", authenticatedUser, java.time.Instant.now().plusSeconds(900))));
+        return new JwtService(properties, sessions);
     }
 }

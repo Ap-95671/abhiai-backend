@@ -41,7 +41,7 @@ class RefreshSessionServiceTest {
         var user = new User("tester", "Test", "test@example.com", "hash");
         ReflectionTestUtils.setField(user, "id", userId);
         when(users.findById(userId)).thenReturn(Optional.of(user));
-        when(jwt.generateAccessToken(userId, "test@example.com")).thenReturn("renewed");
+        when(jwt.generateAccessToken(userId, "test@example.com", RefreshSessionService.hash("token"))).thenReturn("renewed");
         assertThat(service.refresh("token").accessToken()).isEqualTo("renewed");
         assertThat(service.refresh("token").expiresInSeconds()).isEqualTo(900);
         verify(sessions, never()).save(any());

@@ -32,8 +32,11 @@ public class RefreshSessionService {
         byte[] bytes = new byte[32]; random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Duration ttl = rememberMe ? properties.getRefreshTokenTtl() : properties.getSessionTokenTtl();
-        sessions.save(new RefreshSession(hash(token), jwt.parseAccessToken(access.accessToken()).userId(), Instant.now().plus(ttl)));
-        return new SessionTokenResponse(access.accessToken(), access.tokenType(), access.expiresInSeconds(), token, ttl.toSeconds());
+        var principal = jwt.parseAccessToken(access.accessToken());
+        String sessionId = hash(token);
+        sessions.save(new RefreshSession(sessionId, principal.userId(), Instant.now().plus(ttl)));
+        String boundAccess = jwt.generateAccessToken(principal.userId(), principal.email(), sessionId);
+        return new SessionTokenResponse(boundAccess, access.tokenType(), access.expiresInSeconds(), token, ttl.toSeconds());
     }
 
     @Transactional(readOnly = true)
@@ -42,7 +45,7 @@ public class RefreshSessionService {
                 .orElseThrow(InvalidCredentialsException::new);
         var user = users.findById(session.getUserId()).orElseThrow(InvalidCredentialsException::new);
         // Absolute expiry is never extended; concurrent refreshes can reuse this revocable session.
-        return new AuthTokenResponse(jwt.generateAccessToken(user.getId(), user.getEmail()), "Bearer",
+        return new AuthTokenResponse(jwt.generateAccessToken(user.getId(), user.getEmail(), hash(token)), "Bearer",
                 properties.getAccessTokenTtl().toSeconds());
     }
 

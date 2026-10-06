@@ -42,7 +42,7 @@ class AssistantSecurityTest {
         verifyNoInteractions(sessions, conversations);
     }
     @Test void forgedTokenIsRejected() throws Exception {
-        when(jwtService.parseAccessToken("forged")).thenThrow(new IllegalArgumentException("bad"));
+        when(jwtService.parseSessionAccessToken("forged")).thenThrow(new IllegalArgumentException("bad"));
         mvc.perform(post("/api/v1/assistant/sessions").header("Authorization", "Bearer forged")
             .contentType("application/json").content("{}"))
             .andExpect(status().isUnauthorized());
@@ -50,7 +50,7 @@ class AssistantSecurityTest {
     }
     @Test void sessionUsesAuthenticatedIdentityAndNeverReturnsPermanentCredentials() throws Exception {
         var user = java.util.UUID.randomUUID(); var id = java.util.UUID.randomUUID(); var conversationId = java.util.UUID.randomUUID();
-        when(jwtService.parseAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user, "test@example.com"));
+        when(jwtService.parseSessionAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user, "test@example.com"));
         when(sessions.create(user, id)).thenReturn(new RealtimeSessionService.SessionResponse(id, "auth_tokens/short-lived", "gemini-3.1-flash-live-preview", java.time.Instant.now().plusSeconds(900), 120));
         mvc.perform(post("/api/v1/assistant/sessions").header("Authorization", "Bearer valid")
                 .contentType("application/json").content("{\"id\":\"" + id + "\",\"conversationId\":\"" + conversationId + "\"}"))
@@ -65,7 +65,7 @@ class AssistantSecurityTest {
         mvc.perform(post("/api/v1/assistant/tools").contentType("application/json").content("{}"))
             .andExpect(status().isUnauthorized());
         var user=java.util.UUID.randomUUID();var conversation=java.util.UUID.randomUUID();
-        when(jwtService.parseAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user,"test@example.com"));
+        when(jwtService.parseSessionAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user,"test@example.com"));
         when(conversations.history(user,conversation)).thenThrow(new com.abhiai.abhiai_backend.exception.ConversationNotFoundException());
         mvc.perform(post("/api/v1/assistant/tools").header("Authorization","Bearer valid").contentType("application/json")
             .content("{\"conversationId\":\""+conversation+"\",\"name\":\"SEARCH_ABHIAI\",\"arguments\":{\"query\":\"Java\"}}"))
@@ -74,7 +74,7 @@ class AssistantSecurityTest {
     }
     @Test void malformedToolContextIsRejectedBeforeExecution() throws Exception {
         var user=java.util.UUID.randomUUID();
-        when(jwtService.parseAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user,"test@example.com"));
+        when(jwtService.parseSessionAccessToken("valid")).thenReturn(new com.abhiai.abhiai_backend.security.JwtPrincipal(user,"test@example.com"));
         mvc.perform(post("/api/v1/assistant/tools").header("Authorization","Bearer valid").contentType("application/json")
             .content("{\"conversationId\":\""+java.util.UUID.randomUUID()+"\",\"name\":\"SEARCH_ABHIAI\",\"arguments\":{\"query\":\"Java\"},\"context\":{\"pageType\":\"password\",\"externalProcessingAllowed\":false}}"))
             .andExpect(status().isBadRequest());

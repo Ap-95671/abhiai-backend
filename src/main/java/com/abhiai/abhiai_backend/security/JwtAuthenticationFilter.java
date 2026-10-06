@@ -45,7 +45,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private void authenticate(String token) {
         try {
-            JwtPrincipal principal = jwtService.parseAccessToken(token);
+            JwtPrincipal principal = jwtService.parseSessionAccessToken(token);
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     principal,
                     null,
