@@ -4,6 +4,12 @@ Production-oriented Java backend for **AbhiAI**: an authenticated, multi-model A
 
 > **Status:** active development. Core authentication, conversations, multimodal foundations, model routing, and the social platform are implemented. Production hardening and Abhena research are tracked in the public [AbhiAI Development Roadmap](https://github.com/users/Ap-95671/projects/2).
 
+## Product screenshots
+
+The AbhiAI web client uses this API for conversations and the social feed. The [frontend screenshot gallery](https://github.com/Ap-95671/abhiai-frontend#product-screenshots) shows both workspaces with test data.
+
+![AbhiAI conversation workspace and assistant panel](https://raw.githubusercontent.com/Ap-95671/abhiai-frontend/main/docs/screenshots/assistant-workspace.png)
+
 ## Highlights
 
 - JWT authentication with BCrypt password hashing and ownership-aware authorization
